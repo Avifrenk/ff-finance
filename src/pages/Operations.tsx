@@ -50,6 +50,8 @@ export function Operations() {
   const memberById = useMemo(() => new Map(members.map((m) => [m.profile_id, m])), [members])
 
   // Группируем операции с одинаковым transfer_id в одну строку.
+  // Если видна только одна сторона (другой счёт скрыт от текущего viewMode) —
+  // всё равно рендерим как «↔ Перевод», с подписью «(сторона скрыта)».
   const rows = useMemo<Row[]>(() => {
     const transferMap = new Map<string, { from?: Operation; to?: Operation }>()
     const result: Row[] = []
@@ -64,15 +66,23 @@ export function Operations() {
       }
     }
     for (const [transferId, pair] of transferMap) {
-      // Если видна только одна сторона перевода (например один счёт скрыт от
-      // viewMode) — показываем как обычную операцию.
-      if (pair.from && pair.to) {
-        result.push({ kind: 'transfer', transferId, from: pair.from, to: pair.to })
-      } else if (pair.from) {
-        result.push({ kind: 'op', op: pair.from })
-      } else if (pair.to) {
-        result.push({ kind: 'op', op: pair.to })
+      // У transfer как минимум одна сторона есть — гарантия попадания сюда.
+      // Если другая сторона видима через RLS, но отфильтрована viewMode —
+      // достаём её из allOperations.
+      const anchor = pair.from ?? pair.to!
+      let from = pair.from
+      let to = pair.to
+      if (!from || !to) {
+        const fullPair = allOperations.filter((o) => o.transfer_id === transferId)
+        from = from ?? fullPair.find((o) => o.kind === 'expense')
+        to = to ?? fullPair.find((o) => o.kind === 'income')
       }
+      result.push({
+        kind: 'transfer',
+        transferId,
+        from: from ?? anchor,
+        to: to ?? anchor,
+      })
     }
     // Сортировка по дате (новые сверху).
     result.sort((a, b) => {
@@ -84,7 +94,7 @@ export function Operations() {
       return createdB.localeCompare(createdA)
     })
     return result
-  }, [operations])
+  }, [operations, allOperations])
 
   // Итоги: переводы не учитываются ни как доход, ни как расход.
   const totals = useMemo(() => {
@@ -95,6 +105,12 @@ export function Operations() {
   }, [operations])
 
   async function handleDeleteOp(op: Operation) {
+    // Если это половинка перевода — удаляем через transfers (FK каскадит).
+    if (op.transfer_id) {
+      if (!window.confirm('Это часть перевода. Удалить весь перевод? Обе операции уйдут вместе.')) return
+      await removeTransfer(op.transfer_id)
+      return
+    }
     if (!window.confirm('Удалить эту операцию?')) return
     await removeOperation(op.id)
   }
