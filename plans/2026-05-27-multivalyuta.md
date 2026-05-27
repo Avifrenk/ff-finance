@@ -22,7 +22,7 @@
     - `enable row level security` для обеих новых таблиц.
     - GRANT SELECT на `currencies`, `fx_rates` для `authenticated`. INSERT/UPDATE/DELETE — только `service_role` (политики ограничивают для `authenticated`, GRANT-ы не выдаются).
 
-- [x] **Фаза 2.10.2. Edge Function `fetch-ecb-rates` + расписание.** _(код написан, локальный seed fx_rates через psql; deploy + cron — перед сценарием H, требует PAT)_
+- [x] **Фаза 2.10.2. Edge Function `fetch-ecb-rates` + расписание.** _(код написан, задеплоен на prod с `verify_jwt=false`; cron установлен через `pg_cron + pg_net.http_post` миграцией `20260528001000_fetch_ecb_rates_cron.sql` на `0 6 * * *`; первый ручной invoke вернул `{ok:true, inserted:6, currencies:[ILS,USD,GBP], skipped:[RUB]}`. Также добавлен GRANT на `currencies`/`fx_rates` для `service_role` — миграция `20260528000000_service_role_grants_currencies_fx.sql`.)_
   - Тянет `https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml`.
   - Парсит XML (там EUR-base курсы ко всем валютам, включая ILS).
   - Под `service_role`-ключом апсертит в `fx_rates`: для каждой `quote_code` в seed-списке — одна строка `(EUR, quote, rate, date)`. Дополнительно пишет обратные `(quote, EUR, 1/rate, date)` для быстрого lookup.
@@ -53,7 +53,7 @@
     - В `transfers` это значит хранить `fx_rate numeric(18,8) nullable` (поле уже зарезервировано в схеме Фазы 2.8). При создании пары операций `expense` пишется в валюте from-счёта (значение `amount`), `income` — в валюте to-счёта (значение `amount * fx_rate`).
     - RPC `create_transfer` нужно расширить параметром `p_to_amount` (необязательный) — если не передан, считается через текущий `fx_rate`.
 
-- [x] **Фаза 2.10.6. End-to-end (сценарий H из Фазы 2).** _(прогнан через scripts/ffq.mjs: USD-счёт, $50 расход, fx_rates засеяны, конверсия `convertMoney(950 USD → ILS)` = 2694.16 ILS; кросс-валютный transfer $100 → 283.60 ILS через INSERT-эквивалент RPC. Реальный invoke `fetch-ecb-rates` отложен до deploy с PAT.)_
+- [x] **Фаза 2.10.6. End-to-end (сценарий H из Фазы 2).** _(прогнан через scripts/ffq.mjs: USD-счёт, $50 расход, конверсия `convertMoney(950 USD → ILS)` = 2694.16 ILS; кросс-валютный transfer $100 → 283.60 ILS через INSERT-эквивалент RPC. Реальный invoke `fetch-ecb-rates` после deploy вернул `{ok:true, as_of:'2026-05-27', inserted:6, currencies:[ILS,USD,GBP], skipped:[RUB]}` — fx_rates заполнились живыми ECB-курсами, source='ECB'.)_
   - Создать USD-счёт.
   - Добавить расход $50 на нём.
   - Запустить `fetch-ecb-rates` руками (Edge Function invoke) — проверить, что `fx_rates` пополнились.
@@ -88,13 +88,20 @@
 
 ## Деплой миграций к prod-БД
 
+Старый пароль (`GTwWTojNli9XJlBN`) ротирован 2026-05-28 через Supabase
+Management API под PAT (Reset via Dashboard сделал браузерный Клод, но
+переданное значение не подошло — переустановили API-вызовом). Новый
+пароль — в `.env.local` пользователя, в `plans/` не хранится.
+
+Pooler-логин (`postgres.<ref>@aws-1-…pooler.supabase.com:5432`) после
+смены пароля не принимает новые креды (видимо, кешируется на стороне
+pgbouncer); работает direct:
+
 ```
 npx supabase db push --db-url \
-  'postgresql://postgres.cngrrvfqwaqfydmfhiex:GTwWTojNli9XJlBN@aws-1-eu-central-1.pooler.supabase.com:5432/postgres' \
+  'postgresql://postgres:<password>@db.cngrrvfqwaqfydmfhiex.supabase.co:5432/postgres' \
   --yes
 ```
-
-⚠️ DB-пароль был в чате — попросить пользователя ротировать через Settings → Database → Reset password в Supabase Dashboard в конце ветки и обновить строку выше.
 
 ## Итог
 
@@ -116,10 +123,16 @@ npx supabase db push --db-url \
   конверсия 950 USD → 2694.16 ILS, кросс-валютный transfer $100 → 283.60 ILS).
 - **Dev-инфра**: `scripts/ffq.mjs` — раннер разовых SQL к prod-БД через `pg` (без сохранения в package.json).
 
-Что осталось на пользователе:
-- Сгенерировать Supabase Personal Access Token и задеплоить функцию + расписание:
-  `SUPABASE_ACCESS_TOKEN=<pat> npx supabase functions deploy fetch-ecb-rates` и
-  `... functions schedule create fetch-ecb-rates-daily --cron "0 6 * * *" --function fetch-ecb-rates`.
-  Пока курсы засеяны разово через psql на дату 2026-05-27.
-- Ротировать DB-пароль (был в чате) через Supabase Dashboard → Settings → Database → Reset password,
-  обновить строку выше в разделе «Деплой миграций».
+Что в итоге сделано после первого закрытия плана:
+- DB-пароль ротирован через Management API (PAT). Pooler-логин временно не
+  работает после смены — используем direct connection через
+  `db.<ref>.supabase.co:5432`.
+- Edge Function `fetch-ecb-rates` задеплоена с `verify_jwt=false`. GRANT
+  на `currencies`/`fx_rates` для `service_role` добавлен миграцией
+  `20260528000000_service_role_grants_currencies_fx.sql`.
+- Cron-расписание поставлено через `pg_cron + pg_net.http_post` миграцией
+  `20260528001000_fetch_ecb_rates_cron.sql` (`0 6 * * *`). Команды
+  `supabase functions schedule create`, которая была в исходном плане, в
+  актуальной версии CLI нет — поэтому пошли через `pg_net`.
+- Первый живой invoke вернул 6 строк в `fx_rates` (USD/GBP/ILS обе стороны),
+  RUB пропущен (ECB не публикует с 2022).
