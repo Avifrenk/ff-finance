@@ -15,7 +15,7 @@
 
 ## Фазы
 
-- [ ] **Фаза 2.1. Схема БД — accounts, categories, operations + RLS + GRANT.**
+- [x] **Фаза 2.1. Схема БД — accounts, categories, operations + RLS + GRANT.**
   - Миграция `XXXX_operations_core.sql`:
     - `accounts` (id uuid, household_id, owner_profile_id, name, currency='ILS', visibility check `personal|shared`, initial_balance numeric(14,2) default 0, created_at).
     - `categories` (id uuid, household_id, name, kind check `expense|income`, icon text nullable, color text nullable, is_default bool, created_at). Семейные, без visibility — у пары один справочник на двоих.
@@ -23,7 +23,7 @@
     - Все 3 таблицы — `enable row level security` + GRANT для `authenticated` (помним урок Фазы 1).
     - Полезные индексы: `operations(household_id, occurred_at desc)`, `operations(account_id)`.
 
-- [ ] **Фаза 2.2. RLS-политики двухуровневой приватности.**
+- [x] **Фаза 2.2. RLS-политики двухуровневой приватности.**
   - `accounts`:
     - SELECT — если ты член household И (visibility='shared' ИЛИ owner_profile_id = auth.uid()).
     - INSERT/UPDATE/DELETE — только owner_profile_id = auth.uid().
@@ -35,7 +35,7 @@
     - UPDATE/DELETE — только author_profile_id = auth.uid() (пока без admin-кейса).
   - Помним: INSERT с RETURNING требует, чтобы вставленная строка проходила SELECT. Проверяем мысленно для каждой политики.
 
-- [ ] **Фаза 2.3. Дефолтные категории под Израиль.**
+- [x] **Фаза 2.3. Дефолтные категории под Израиль.**
   - RPC `seed_default_categories(target_household_id uuid) returns void`, SECURITY DEFINER.
   - Список расходов (примерно): «Продукты», «Кафе и рестораны», «Транспорт», «Жильё (арнона, ваад)», «Коммуналка», «Купат-холим», «Связь и интернет», «Одежда», «Развлечения», «Здоровье», «Образование», «Подарки», «Прочее».
   - Список доходов: «Зарплата», «Фриланс/Бонус», «Подарки/Возвраты», «Прочее».

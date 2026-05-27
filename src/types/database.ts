@@ -102,6 +102,114 @@ export type Database = {
         }
         Relationships: []
       }
+      accounts: {
+        Row: {
+          id: string
+          household_id: string
+          owner_profile_id: string
+          name: string
+          currency: string
+          visibility: 'personal' | 'shared'
+          initial_balance: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          household_id: string
+          owner_profile_id: string
+          name: string
+          currency?: string
+          visibility: 'personal' | 'shared'
+          initial_balance?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          household_id?: string
+          owner_profile_id?: string
+          name?: string
+          currency?: string
+          visibility?: 'personal' | 'shared'
+          initial_balance?: number
+          created_at?: string
+        }
+        Relationships: []
+      }
+      categories: {
+        Row: {
+          id: string
+          household_id: string
+          name: string
+          kind: 'expense' | 'income'
+          icon: string | null
+          color: string | null
+          is_default: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          household_id: string
+          name: string
+          kind: 'expense' | 'income'
+          icon?: string | null
+          color?: string | null
+          is_default?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          household_id?: string
+          name?: string
+          kind?: 'expense' | 'income'
+          icon?: string | null
+          color?: string | null
+          is_default?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
+      operations: {
+        Row: {
+          id: string
+          household_id: string
+          account_id: string
+          category_id: string | null
+          author_profile_id: string
+          kind: 'expense' | 'income'
+          amount: number
+          occurred_at: string
+          note: string | null
+          is_private: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          household_id: string
+          account_id: string
+          category_id?: string | null
+          author_profile_id: string
+          kind: 'expense' | 'income'
+          amount: number
+          occurred_at?: string
+          note?: string | null
+          is_private?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          household_id?: string
+          account_id?: string
+          category_id?: string | null
+          author_profile_id?: string
+          kind?: 'expense' | 'income'
+          amount?: number
+          occurred_at?: string
+          note?: string | null
+          is_private?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: {
@@ -112,6 +220,10 @@ export type Database = {
       current_household_id: {
         Args: Record<string, never>
         Returns: string | null
+      }
+      seed_default_categories: {
+        Args: { target_household_id: string }
+        Returns: undefined
       }
     }
     Enums: Record<string, never>
