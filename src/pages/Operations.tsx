@@ -16,11 +16,30 @@ const PERIOD_LABELS: Record<PeriodFilter, string> = {
 export function Operations() {
   const { viewMode, household, profile, members } = useApp()
   const [period, setPeriod] = useState<PeriodFilter>('month')
-  const { operations, loading, error, remove } = useOperations(period)
-  const { accounts } = useAccounts()
+  const { operations: allOperations, loading, error, remove } = useOperations(period)
+  const { accounts: allAccounts } = useAccounts()
   const { categories } = useCategories()
 
-  const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts])
+  // Та же viewMode-логика что в Dashboard.
+  const accounts = useMemo(() => {
+    if (viewMode === 'personal') {
+      return allAccounts.filter(
+        (a) => a.visibility === 'personal' && a.owner_profile_id === profile?.id,
+      )
+    }
+    return allAccounts.filter((a) => a.visibility === 'shared')
+  }, [allAccounts, viewMode, profile?.id])
+
+  const operations = useMemo(() => {
+    const accountIds = new Set(accounts.map((a) => a.id))
+    const base = allOperations.filter((o) => accountIds.has(o.account_id))
+    if (viewMode === 'personal') {
+      return base.filter((o) => o.author_profile_id === profile?.id)
+    }
+    return base
+  }, [allOperations, accounts, viewMode, profile?.id])
+
+  const accountById = useMemo(() => new Map(allAccounts.map((a) => [a.id, a])), [allAccounts])
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
   const memberById = useMemo(() => new Map(members.map((m) => [m.profile_id, m])), [members])
 

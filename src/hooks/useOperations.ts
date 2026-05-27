@@ -50,7 +50,7 @@ function periodRange(period: PeriodFilter): { from?: string; to?: string } {
 }
 
 export function useOperations(period: PeriodFilter = 'month') {
-  const { household, profile, viewMode } = useApp()
+  const { household, profile } = useApp()
   const [operations, setOperations] = useState<Operation[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -76,12 +76,8 @@ export function useOperations(period: PeriodFilter = 'month') {
     if (range.from) q = q.gte('occurred_at', range.from)
     if (range.to) q = q.lte('occurred_at', range.to)
 
-    // В personal-viewMode сужаем до своего авторства.
-    // (RLS пропустит и операции партнёра на shared-счетах, но
-    // в личном кабинете показывать только себя — UX-договорённость.)
-    if (viewMode === 'personal' && profile) {
-      q = q.eq('author_profile_id', profile.id)
-    }
+    // viewMode-фильтрация делается в страницах (по accounts), не здесь —
+    // хук возвращает всё, что видимо через RLS.
 
     const { data, error: err } = await q
     setLoading(false)
@@ -90,7 +86,7 @@ export function useOperations(period: PeriodFilter = 'month') {
       return
     }
     setOperations(data ?? [])
-  }, [household, profile, viewMode, period])
+  }, [household, period])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect

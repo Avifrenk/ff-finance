@@ -8,8 +8,29 @@ import { formatMoney } from '../lib/format'
 
 export function Dashboard() {
   const { household, viewMode, profile, members } = useApp()
-  const { accounts } = useAccounts()
-  const { operations, loading } = useOperations('all')
+  const { accounts: allAccounts } = useAccounts()
+  const { operations: allOperations, loading } = useOperations('all')
+
+  // viewMode-фильтрация:
+  //   personal — только мои personal-счета и мои операции на них;
+  //   household — только shared-счета и все видимые операции на них.
+  const accounts = useMemo(() => {
+    if (viewMode === 'personal') {
+      return allAccounts.filter(
+        (a) => a.visibility === 'personal' && a.owner_profile_id === profile?.id,
+      )
+    }
+    return allAccounts.filter((a) => a.visibility === 'shared')
+  }, [allAccounts, viewMode, profile?.id])
+
+  const operations = useMemo(() => {
+    const accountIds = new Set(accounts.map((a) => a.id))
+    const base = allOperations.filter((o) => accountIds.has(o.account_id))
+    if (viewMode === 'personal') {
+      return base.filter((o) => o.author_profile_id === profile?.id)
+    }
+    return base
+  }, [allOperations, accounts, viewMode, profile?.id])
 
   // Балансы по счёту: initial_balance + sum(income) - sum(expense).
   const balanceByAccount = useMemo(() => {
@@ -24,8 +45,6 @@ export function Dashboard() {
     return map
   }, [accounts, operations])
 
-  // Сумма по всем видимым счетам (для пары в одной валюте ILS — просто сумма;
-  // мультивалюта будет в Фазе 2.10 с конвертацией в base_currency).
   const totalBalance = useMemo(() => {
     let sum = 0
     for (const a of accounts) {
@@ -34,7 +53,6 @@ export function Dashboard() {
     return sum
   }, [accounts, balanceByAccount])
 
-  // Этот месяц: доход − расход среди уже загруженных операций.
   const monthTotals = useMemo(() => {
     const now = new Date()
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
