@@ -39,3 +39,6 @@ supabase/.temp
 
 # Business context (private, not for git)
 .business/
+
+# Claude Code local settings
+.claude/
