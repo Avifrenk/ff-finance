@@ -1,18 +1,243 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../contexts/useApp'
+import { useAccounts } from '../hooks/useAccounts'
+import { useCategories } from '../hooks/useCategories'
+import { useOperations } from '../hooks/useOperations'
+import { useSchedules, describeCadence } from '../hooks/useSchedules'
 import { ErrorBox, PrimaryButton, SecondaryButton } from '../components/AuthControls'
+import { formatDate, formatMoney } from '../lib/format'
 
 export function Dashboard() {
-  const { household, members, viewMode, profile, refresh } = useApp()
-  const [inviteUrl, setInviteUrl] = useState<string | null>(null)
-  const [inviteError, setInviteError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const { household, viewMode, profile, members } = useApp()
+  const { accounts: allAccounts } = useAccounts()
+  const { operations: allOperations, loading } = useOperations('all')
+
+  // viewMode-фильтрация:
+  //   personal — только мои personal-счета и мои операции на них;
+  //   household — только shared-счета и все видимые операции на них.
+  const accounts = useMemo(() => {
+    if (viewMode === 'personal') {
+      return allAccounts.filter(
+        (a) => a.visibility === 'personal' && a.owner_profile_id === profile?.id,
+      )
+    }
+    return allAccounts.filter((a) => a.visibility === 'shared')
+  }, [allAccounts, viewMode, profile?.id])
+
+  const operations = useMemo(() => {
+    const accountIds = new Set(accounts.map((a) => a.id))
+    const base = allOperations.filter((o) => accountIds.has(o.account_id))
+    if (viewMode === 'personal') {
+      return base.filter((o) => o.author_profile_id === profile?.id)
+    }
+    return base
+  }, [allOperations, accounts, viewMode, profile?.id])
+
+  // Балансы по счёту: initial_balance + sum(income) - sum(expense).
+  const balanceByAccount = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const a of accounts) {
+      map.set(a.id, Number(a.initial_balance))
+    }
+    for (const op of operations) {
+      const delta = op.kind === 'expense' ? -Number(op.amount) : Number(op.amount)
+      map.set(op.account_id, (map.get(op.account_id) ?? 0) + delta)
+    }
+    return map
+  }, [accounts, operations])
+
+  const totalBalance = useMemo(() => {
+    let sum = 0
+    for (const a of accounts) {
+      sum += balanceByAccount.get(a.id) ?? 0
+    }
+    return sum
+  }, [accounts, balanceByAccount])
+
+  const monthTotals = useMemo(() => {
+    const now = new Date()
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
+    let income = 0
+    let expense = 0
+    for (const op of operations) {
+      if (op.occurred_at < monthStart) continue
+      if (op.transfer_id !== null) continue // переводы не дают ни дохода, ни расхода
+      if (op.kind === 'income') income += Number(op.amount)
+      else expense += Number(op.amount)
+    }
+    return { income, expense, net: income - expense }
+  }, [operations])
 
   if (!household) return null
 
   const isOwner = household.owner_id === profile?.id
   const partnerJoined = members.some((m) => m.role === 'partner')
+
+  return (
+    <div className="space-y-6">
+      <header>
+        <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          {viewMode === 'personal' ? '🧍 Личный кабинет' : '🏠 Семейный кабинет'}
+        </div>
+        <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mt-1">
+          {viewMode === 'personal' ? (profile?.display_name ?? 'Я') : household.name}
+        </h1>
+      </header>
+
+      <section className="grid sm:grid-cols-2 gap-4">
+        <BigStat label="Общий баланс" value={formatMoney(totalBalance)} />
+        <BigStat
+          label="Этот месяц"
+          value={formatMoney(monthTotals.net)}
+          sub={`+${formatMoney(monthTotals.income).replace(/[^\d.,]/g, '')} − ${formatMoney(monthTotals.expense).replace(/[^\d.,]/g, '')} ₪`}
+          positive={monthTotals.net >= 0}
+          negative={monthTotals.net < 0}
+        />
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-5">
+        <h2 className="font-semibold text-slate-900 dark:text-slate-100 mb-3">Счета</h2>
+        {loading && <p className="text-sm text-slate-500">Загрузка…</p>}
+        {!loading && accounts.length === 0 && (
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Пока ни одного счёта.{' '}
+            <a href="/settings" className="text-indigo-600 dark:text-indigo-400 hover:underline">
+              Добавить
+            </a>
+            .
+          </p>
+        )}
+        <ul className="divide-y divide-slate-200 dark:divide-slate-700 -my-2">
+          {accounts.map((a) => (
+            <li key={a.id} className="py-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <span>{a.visibility === 'shared' ? '🏠' : '🧍'}</span>
+                  <span>{a.name}</span>
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  {a.visibility === 'shared' ? 'Семейный' : 'Личный'}
+                </div>
+              </div>
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                {formatMoney(balanceByAccount.get(a.id) ?? 0, a.currency)}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <UpcomingSchedules />
+
+      {isOwner && !partnerJoined && <InviteSection />}
+    </div>
+  )
+}
+
+function UpcomingSchedules() {
+  const { viewMode, profile } = useApp()
+  const { schedules } = useSchedules()
+  const { accounts } = useAccounts()
+  const { categories } = useCategories()
+
+  const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts])
+  const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
+
+  const upcoming = useMemo(() => {
+    const today = new Date()
+    const horizon = new Date()
+    horizon.setDate(horizon.getDate() + 7)
+    const horizonIso = horizon.toISOString().slice(0, 10)
+    const todayIso = today.toISOString().slice(0, 10)
+    return schedules
+      .filter((s) => s.is_active && s.next_run_at <= horizonIso && s.next_run_at >= todayIso)
+      .filter((s) => {
+        // Уважаем viewMode так же, как делает Operations/Dashboard.
+        const a = accountById.get(s.account_id)
+        if (!a) return false
+        if (viewMode === 'personal') {
+          return a.visibility === 'personal' && a.owner_profile_id === profile?.id
+        }
+        return a.visibility === 'shared'
+      })
+      .sort((a, b) => a.next_run_at.localeCompare(b.next_run_at))
+  }, [schedules, accountById, viewMode, profile?.id])
+
+  if (upcoming.length === 0) return null
+
+  return (
+    <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-5">
+      <h2 className="font-semibold text-slate-900 dark:text-slate-100 mb-3">Ближайшие 7 дней</h2>
+      <ul className="divide-y divide-slate-200 dark:divide-slate-700 -my-2">
+        {upcoming.map((s) => {
+          const account = accountById.get(s.account_id)
+          const category = s.category_id ? categoryById.get(s.category_id) : null
+          return (
+            <li key={s.id} className="py-3 flex items-center gap-3">
+              <div className="h-9 w-9 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-sm">
+                {category?.icon ?? (s.kind === 'expense' ? '💸' : '💰')}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                  {category?.name ?? (s.kind === 'expense' ? 'Расход' : 'Доход')}
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  {formatDate(s.next_run_at)} · {describeCadence(s.cadence_rule)}
+                  {account ? ` · ${account.name}` : ''}
+                </div>
+              </div>
+              <div
+                className={`text-sm font-semibold whitespace-nowrap ${
+                  s.kind === 'expense'
+                    ? 'text-slate-900 dark:text-slate-100'
+                    : 'text-emerald-600 dark:text-emerald-400'
+                }`}
+              >
+                {s.kind === 'expense' ? '−' : '+'}
+                {formatMoney(Number(s.amount), account?.currency ?? 'ILS').replace('−', '')}
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
+function BigStat({
+  label,
+  value,
+  sub,
+  positive,
+  negative,
+}: {
+  label: string
+  value: string
+  sub?: string
+  positive?: boolean
+  negative?: boolean
+}) {
+  const valueColor = positive
+    ? 'text-emerald-600 dark:text-emerald-400'
+    : negative
+      ? 'text-rose-600 dark:text-rose-400'
+      : 'text-slate-900 dark:text-slate-100'
+  return (
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-5">
+      <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">{label}</div>
+      <div className={`text-2xl font-semibold mt-1 ${valueColor}`}>{value}</div>
+      {sub && <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{sub}</div>}
+    </div>
+  )
+}
+
+function InviteSection() {
+  const { household, refresh } = useApp()
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null)
+  const [inviteError, setInviteError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   async function createInvite() {
     setInviteError(null)
@@ -31,87 +256,39 @@ export function Dashboard() {
     await refresh()
   }
 
-  return (
-    <div className="space-y-6">
-      <header>
-        <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          {viewMode === 'personal' ? '🧍 Личный кабинет' : '🏠 Семейный кабинет'}
-        </div>
-        <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mt-1">
-          {viewMode === 'personal' ? (profile?.display_name ?? 'Я') : household.name}
-        </h1>
-      </header>
-
-      <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-5">
-        <h2 className="font-semibold text-slate-900 dark:text-slate-100 mb-3">Участники семьи</h2>
-        <ul className="space-y-2">
-          {members.map((m) => (
-            <li key={m.profile_id} className="flex items-center gap-3 text-sm">
-              <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 flex items-center justify-center text-xs font-medium">
-                {(m.display_name ?? '?').charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <div className="text-slate-900 dark:text-slate-100">
-                  {m.display_name ?? '(без имени)'}
-                  {m.profile_id === profile?.id && (
-                    <span className="ml-2 text-xs text-slate-400">— это вы</span>
-                  )}
-                </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">
-                  {m.role === 'owner' ? 'Создатель семьи' : 'Партнёр'}
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-
-        {isOwner && !partnerJoined && (
-          <div className="mt-5 pt-5 border-t border-slate-200 dark:border-slate-700">
-            <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
-              Партнёр ещё не присоединился. Сгенерируйте ссылку-приглашение и пришлите ей/ему любым удобным способом.
-            </p>
-            {!inviteUrl ? (
-              <PrimaryButton onClick={createInvite} disabled={busy}>
-                {busy ? 'Создаём…' : 'Сгенерировать приглашение'}
-              </PrimaryButton>
-            ) : (
-              <InviteLink url={inviteUrl} onRegenerate={() => setInviteUrl(null)} />
-            )}
-            {inviteError && (
-              <div className="mt-3">
-                <ErrorBox>{inviteError}</ErrorBox>
-              </div>
-            )}
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-transparent p-5 text-sm text-slate-500 dark:text-slate-400">
-        Финансовая аналитика появится в Фазе 3. Сейчас вы на этапе авторизации и кабинетов (Фаза 1).
-      </section>
-    </div>
-  )
-}
-
-function InviteLink({ url, onRegenerate }: { url: string; onRegenerate: () => void }) {
-  const [copied, setCopied] = useState(false)
-
   async function copy() {
-    await navigator.clipboard.writeText(url)
+    if (!inviteUrl) return
+    await navigator.clipboard.writeText(inviteUrl)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }
 
   return (
-    <div className="space-y-2">
-      <div className="font-mono text-xs px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 break-all">
-        {url}
-      </div>
-      <div className="flex gap-2">
-        <PrimaryButton onClick={copy}>{copied ? 'Скопировано ✓' : 'Скопировать ссылку'}</PrimaryButton>
-        <SecondaryButton onClick={onRegenerate}>Сгенерировать новую</SecondaryButton>
-      </div>
-      <p className="text-xs text-slate-500 dark:text-slate-400">Ссылка действует 7 дней.</p>
-    </div>
+    <section className="rounded-2xl border border-dashed border-indigo-300 dark:border-indigo-800 bg-indigo-50/40 dark:bg-indigo-950/20 p-5">
+      <h2 className="font-semibold text-slate-900 dark:text-slate-100 mb-2">Пригласить партнёра</h2>
+      <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
+        Сгенерируйте ссылку и пришлите ей/ему любым удобным способом.
+      </p>
+      {!inviteUrl ? (
+        <PrimaryButton onClick={createInvite} disabled={busy}>
+          {busy ? 'Создаём…' : 'Сгенерировать приглашение'}
+        </PrimaryButton>
+      ) : (
+        <div className="space-y-2">
+          <div className="font-mono text-xs px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 break-all">
+            {inviteUrl}
+          </div>
+          <div className="flex gap-2">
+            <PrimaryButton onClick={copy}>{copied ? 'Скопировано ✓' : 'Скопировать'}</PrimaryButton>
+            <SecondaryButton onClick={() => setInviteUrl(null)}>Новую</SecondaryButton>
+          </div>
+        </div>
+      )}
+      {inviteError && (
+        <div className="mt-3">
+          <ErrorBox>{inviteError}</ErrorBox>
+        </div>
+      )}
+    </section>
   )
 }
