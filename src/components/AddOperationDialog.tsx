@@ -3,6 +3,9 @@ import { useAccounts } from '../hooks/useAccounts'
 import { useCategories } from '../hooks/useCategories'
 import { useOperations, type CreateOperationInput } from '../hooks/useOperations'
 import { useTransfers } from '../hooks/useTransfers'
+import { useFxRates } from '../hooks/useFxRates'
+import { convertMoney } from '../lib/fx'
+import { currencySymbol } from '../lib/format'
 import { AuthInput, ErrorBox, PrimaryButton, SecondaryButton } from './AuthControls'
 
 type Tab = 'expense' | 'income' | 'transfer'
@@ -24,9 +27,11 @@ export function AddOperationDialog({
   const { categories } = useCategories()
   const { create: createOperation } = useOperations('month')
   const { create: createTransfer } = useTransfers()
+  const { ratesByDate } = useFxRates()
 
   const [tab, setTab] = useState<Tab>('expense')
   const [amount, setAmount] = useState('')
+  const [toAmount, setToAmount] = useState('') // только для cross-currency transfer
   const [accountId, setAccountId] = useState('')
   const [toAccountId, setToAccountId] = useState('')
   const [categoryId, setCategoryId] = useState('')
@@ -44,7 +49,21 @@ export function AddOperationDialog({
     [categories, kind],
   )
   const selectedAccount = visibleAccounts.find((a) => a.id === accountId)
+  const toAccount = visibleAccounts.find((a) => a.id === toAccountId)
   const otherAccounts = visibleAccounts.filter((a) => a.id !== accountId)
+  const isCrossCurrency =
+    tab === 'transfer' &&
+    !!selectedAccount &&
+    !!toAccount &&
+    selectedAccount.currency !== toAccount.currency
+
+  // Подсказка по курсу: amount в from-валюте конвертим в to-валюту.
+  const suggestedToAmount = useMemo(() => {
+    if (!isCrossCurrency || !selectedAccount || !toAccount) return null
+    const n = Number(amount.replace(',', '.'))
+    if (!isFinite(n) || n <= 0) return null
+    return convertMoney(n, selectedAccount.currency, toAccount.currency, ratesByDate, occurredAt)
+  }, [isCrossCurrency, selectedAccount, toAccount, amount, ratesByDate, occurredAt])
 
   /* eslint-disable react-hooks/set-state-in-effect --
      все четыре эффекта ниже — legit form-reset / cascading-нормализация
@@ -57,6 +76,7 @@ export function AddOperationDialog({
     if (!open) return
     setTab('expense')
     setAmount('')
+    setToAmount('')
     setAccountId(visibleAccounts[0]?.id ?? '')
     setToAccountId('')
     setCategoryId('')
@@ -65,6 +85,11 @@ export function AddOperationDialog({
     setIsPrivate(false)
     setError(null)
   }, [open, visibleAccounts])
+
+  // Сбрасываем toAmount если выбор счетов сделал перевод не-кросс-валютным.
+  useEffect(() => {
+    if (!isCrossCurrency) setToAmount('')
+  }, [isCrossCurrency])
 
   useEffect(() => {
     setCategoryId('')
@@ -104,6 +129,25 @@ export function AddOperationDialog({
       return
     }
 
+    let toAmountNum: number | null = null
+    if (tab === 'transfer' && isCrossCurrency) {
+      if (toAmount.trim()) {
+        const n = Number(toAmount.replace(',', '.'))
+        if (!isFinite(n) || n <= 0) {
+          setError('Сумма получена должна быть положительным числом')
+          return
+        }
+        toAmountNum = n
+      } else if (suggestedToAmount !== null) {
+        toAmountNum = suggestedToAmount
+      } else {
+        setError(
+          `Нет курса для конверсии ${selectedAccount?.currency} → ${toAccount?.currency} на ${occurredAt}. Введите фактически полученную сумму вручную.`,
+        )
+        return
+      }
+    }
+
     setBusy(true)
     try {
       if (tab === 'transfer') {
@@ -113,6 +157,7 @@ export function AddOperationDialog({
           amount: amountNum,
           occurred_at: occurredAt,
           note: note.trim() || null,
+          to_amount: toAmountNum,
         })
       } else {
         const input: CreateOperationInput = {
@@ -163,7 +208,7 @@ export function AddOperationDialog({
 
             <div>
               <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Сумма
+                Сумма{selectedAccount ? ` (${currencySymbol(selectedAccount.currency)} ${selectedAccount.currency})` : ''}
               </label>
               <AuthInput
                 type="text"
@@ -201,10 +246,32 @@ export function AddOperationDialog({
                   {otherAccounts.map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.visibility === 'shared' ? '🏠 ' : '🧍 '}
-                      {a.name}
+                      {a.name} {currencySymbol(a.currency)}
                     </option>
                   ))}
                 </Select>
+              </div>
+            )}
+
+            {tab === 'transfer' && isCrossCurrency && toAccount && (
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Получено ({currencySymbol(toAccount.currency)} {toAccount.currency})
+                </label>
+                <AuthInput
+                  type="text"
+                  inputMode="decimal"
+                  placeholder={
+                    suggestedToAmount !== null
+                      ? `по курсу ECB: ${suggestedToAmount.toFixed(2)}`
+                      : 'нет курса — введите вручную'
+                  }
+                  value={toAmount}
+                  onChange={(e) => setToAmount(e.target.value)}
+                />
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Если оставить пустым — пересчитаем по последнему курсу ECB на дату операции.
+                </p>
               </div>
             )}
 

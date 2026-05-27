@@ -1,10 +1,12 @@
 import { useMemo, useState, type FormEvent } from 'react'
+import { supabase } from '../lib/supabase'
 import { useApp } from '../contexts/useApp'
 import { useAccounts, type Account } from '../hooks/useAccounts'
 import { useCategories } from '../hooks/useCategories'
 import { useSchedules, describeCadence, type Schedule } from '../hooks/useSchedules'
+import { useCurrencies, type Currency } from '../hooks/useCurrencies'
 import { AuthInput, ErrorBox, PrimaryButton, SecondaryButton } from '../components/AuthControls'
-import { formatDate, formatMoney } from '../lib/format'
+import { currencySymbol, formatDate, formatMoney } from '../lib/format'
 
 export function Settings() {
   const { profile, household, members, viewMode, signOut } = useApp()
@@ -24,6 +26,8 @@ export function Settings() {
         <Row label="Участников">{members.length}</Row>
       </section>
 
+      <BaseCurrencySection />
+
       <AccountsSection />
 
       <SchedulesSection />
@@ -35,6 +39,67 @@ export function Settings() {
         Выйти из аккаунта
       </button>
     </div>
+  )
+}
+
+function BaseCurrencySection() {
+  const { profile, household, refresh } = useApp()
+  const { currencies, loading: curLoading } = useCurrencies()
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
+
+  if (!household) return null
+  const isOwner = household.owner_id === profile?.id
+
+  async function change(code: string) {
+    if (!household || code === household.base_currency) return
+    setError(null)
+    setInfo(null)
+    setSaving(true)
+    const { error: err } = await supabase
+      .from('households')
+      .update({ base_currency: code })
+      .eq('id', household.id)
+    setSaving(false)
+    if (err) {
+      setError(err.message)
+      return
+    }
+    setInfo('Сохранено')
+    await refresh()
+    setTimeout(() => setInfo(null), 1500)
+  }
+
+  return (
+    <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-5">
+      <h2 className="font-semibold text-slate-900 dark:text-slate-100 mb-1">Базовая валюта семьи</h2>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+        В этой валюте Dashboard показывает общий баланс и месячные итоги.
+        Счета могут быть в любых валютах — пересчёт делается по курсу ECB.
+      </p>
+      {curLoading ? (
+        <p className="text-sm text-slate-500">Загрузка…</p>
+      ) : isOwner ? (
+        <SelectBox value={household.base_currency} onChange={change}>
+          {currencies.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.symbol} {c.code} — {c.name}
+            </option>
+          ))}
+        </SelectBox>
+      ) : (
+        <div className="text-sm text-slate-900 dark:text-slate-100">
+          {currencySymbol(household.base_currency)} {household.base_currency}
+          <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">
+            (менять может только владелец семьи)
+          </span>
+        </div>
+      )}
+      {saving && <p className="text-xs text-slate-500 mt-2">Сохраняем…</p>}
+      {info && <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2">{info}</p>}
+      {error && <div className="mt-2"><ErrorBox>{error}</ErrorBox></div>}
+    </section>
   )
 }
 
@@ -455,6 +520,9 @@ function AccountsSection() {
                 <div className="text-sm font-medium text-slate-900 dark:text-slate-100 flex items-center gap-2">
                   <span>{a.visibility === 'shared' ? '🏠' : '🧍'}</span>
                   <span>{a.name}</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400 font-normal">
+                    {currencySymbol(a.currency)} {a.currency}
+                  </span>
                 </div>
                 <div className="text-xs text-slate-500 dark:text-slate-400">
                   {a.visibility === 'shared' ? 'Семейный' : 'Личный'} ·{' '}
@@ -498,10 +566,14 @@ function AddAccountForm({
     name: string
     visibility: 'personal' | 'shared'
     initial_balance: number
+    currency: string
   }) => Promise<unknown>
 }) {
+  const { household } = useApp()
+  const { currencies } = useCurrencies()
   const [name, setName] = useState('')
   const [visibility, setVisibility] = useState<'personal' | 'shared'>('personal')
+  const [currency, setCurrency] = useState(household?.base_currency ?? 'ILS')
   const [initialBalance, setInitialBalance] = useState('0')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -514,6 +586,7 @@ function AddAccountForm({
       await create({
         name: name.trim(),
         visibility,
+        currency,
         initial_balance: Number(initialBalance) || 0,
       })
       onDone()
@@ -561,6 +634,19 @@ function AddAccountForm({
             ? 'Видите только вы. Партнёр не узнает ни о счёте, ни об операциях на нём.'
             : 'Видят оба партнёра. Операции тоже видны обоим (если не отметить операцию как приватную).'}
         </p>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+          Валюта
+        </label>
+        <SelectBox value={currency} onChange={setCurrency}>
+          {currencies.map((c: Currency) => (
+            <option key={c.code} value={c.code}>
+              {c.symbol} {c.code} — {c.name}
+            </option>
+          ))}
+        </SelectBox>
       </div>
 
       <div>

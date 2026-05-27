@@ -14,6 +14,7 @@ export interface Household {
   id: string
   name: string
   owner_id: string
+  base_currency: string
 }
 
 export interface HouseholdMemberWithProfile {

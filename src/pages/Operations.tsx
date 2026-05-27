@@ -4,8 +4,10 @@ import { useAccounts } from '../hooks/useAccounts'
 import { useCategories } from '../hooks/useCategories'
 import { useOperations, type Operation, type PeriodFilter } from '../hooks/useOperations'
 import { useTransfers } from '../hooks/useTransfers'
+import { useFxRates } from '../hooks/useFxRates'
 import { ErrorBox } from '../components/AuthControls'
 import { formatDate, formatMoney } from '../lib/format'
+import { convertMoney } from '../lib/fx'
 
 const PERIOD_LABELS: Record<PeriodFilter, string> = {
   month: 'Этот месяц',
@@ -25,6 +27,8 @@ export function Operations() {
   const { remove: removeTransfer } = useTransfers()
   const { accounts: allAccounts } = useAccounts()
   const { categories } = useCategories()
+  const { ratesByDate } = useFxRates()
+  const baseCurrency = household?.base_currency ?? 'ILS'
 
   // viewMode-фильтрация (см. Dashboard).
   const accounts = useMemo(() => {
@@ -97,12 +101,25 @@ export function Operations() {
   }, [operations, allOperations])
 
   // Итоги: переводы не учитываются ни как доход, ни как расход.
+  // Конвертим каждую операцию в base_currency на её дату.
   const totals = useMemo(() => {
-    const regular = operations.filter((o) => o.transfer_id === null)
-    const income = regular.filter((o) => o.kind === 'income').reduce((s, o) => s + Number(o.amount), 0)
-    const expense = regular.filter((o) => o.kind === 'expense').reduce((s, o) => s + Number(o.amount), 0)
+    let income = 0
+    let expense = 0
+    for (const op of operations) {
+      if (op.transfer_id !== null) continue
+      const acc = accountById.get(op.account_id)
+      const currency = acc?.currency ?? baseCurrency
+      const amount = Number(op.amount)
+      const conv =
+        currency === baseCurrency
+          ? amount
+          : convertMoney(amount, currency, baseCurrency, ratesByDate, op.occurred_at)
+      if (conv === null) continue
+      if (op.kind === 'income') income += conv
+      else expense += conv
+    }
     return { income, expense, net: income - expense }
-  }, [operations])
+  }, [operations, accountById, baseCurrency, ratesByDate])
 
   async function handleDeleteOp(op: Operation) {
     // Если это половинка перевода — удаляем через transfers (FK каскадит).
@@ -134,9 +151,14 @@ export function Operations() {
       <PeriodTabs value={period} onChange={setPeriod} />
 
       <div className="grid grid-cols-3 gap-3">
-        <Stat label="Доход" value={formatMoney(totals.income)} positive />
-        <Stat label="Расход" value={formatMoney(totals.expense)} negative />
-        <Stat label="Итог" value={formatMoney(totals.net)} positive={totals.net >= 0} negative={totals.net < 0} />
+        <Stat label="Доход" value={formatMoney(totals.income, baseCurrency)} positive />
+        <Stat label="Расход" value={formatMoney(totals.expense, baseCurrency)} negative />
+        <Stat
+          label="Итог"
+          value={formatMoney(totals.net, baseCurrency)}
+          positive={totals.net >= 0}
+          negative={totals.net < 0}
+        />
       </div>
 
       {loading && <p className="text-sm text-slate-500">Загрузка…</p>}
@@ -171,8 +193,13 @@ export function Operations() {
                     {row.from.note ? ` · ${row.from.note}` : ''}
                   </div>
                 </div>
-                <div className="text-sm font-semibold whitespace-nowrap text-slate-900 dark:text-slate-100">
-                  {formatMoney(Number(row.from.amount), fromAcc?.currency ?? 'ILS')}
+                <div className="text-sm font-semibold whitespace-nowrap text-slate-900 dark:text-slate-100 text-right">
+                  {formatMoney(Number(row.from.amount), fromAcc?.currency ?? baseCurrency)}
+                  {fromAcc && toAcc && fromAcc.currency !== toAcc.currency && (
+                    <div className="text-xs font-normal text-slate-500 dark:text-slate-400">
+                      → {formatMoney(Number(row.to.amount), toAcc.currency)}
+                    </div>
+                  )}
                 </div>
                 {isMine && (
                   <button
@@ -222,7 +249,7 @@ export function Operations() {
                 }`}
               >
                 {op.kind === 'expense' ? '−' : '+'}
-                {formatMoney(Number(op.amount), account?.currency ?? 'ILS').replace('−', '')}
+                {formatMoney(Number(op.amount), account?.currency ?? baseCurrency).replace('−', '')}
               </div>
               {isMine && (
                 <button

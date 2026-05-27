@@ -2,14 +2,20 @@ const CURRENCY_SYMBOL: Record<string, string> = {
   ILS: '₪',
   USD: '$',
   EUR: '€',
+  GBP: '£',
+  RUB: '₽',
 }
 
-export function formatMoney(amount: number, currency = 'ILS'): string {
-  const symbol = CURRENCY_SYMBOL[currency] ?? currency
+export function currencySymbol(code: string): string {
+  return CURRENCY_SYMBOL[code] ?? code
+}
+
+export function formatMoney(amount: number, currency = 'ILS', decimals = 2): string {
+  const symbol = currencySymbol(currency)
   const sign = amount < 0 ? '−' : ''
   const abs = Math.abs(amount).toLocaleString('ru-RU', {
     minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
+    maximumFractionDigits: decimals,
   })
   return `${sign}${abs} ${symbol}`
 }

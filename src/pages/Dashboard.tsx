@@ -5,13 +5,17 @@ import { useAccounts } from '../hooks/useAccounts'
 import { useCategories } from '../hooks/useCategories'
 import { useOperations } from '../hooks/useOperations'
 import { useSchedules, describeCadence } from '../hooks/useSchedules'
+import { useFxRates } from '../hooks/useFxRates'
 import { ErrorBox, PrimaryButton, SecondaryButton } from '../components/AuthControls'
 import { formatDate, formatMoney } from '../lib/format'
+import { convertMoney } from '../lib/fx'
 
 export function Dashboard() {
   const { household, viewMode, profile, members } = useApp()
   const { accounts: allAccounts } = useAccounts()
   const { operations: allOperations, loading } = useOperations('all')
+  const { ratesByDate } = useFxRates()
+  const baseCurrency = household?.base_currency ?? 'ILS'
 
   // viewMode-фильтрация:
   //   personal — только мои personal-счета и мои операции на них;
@@ -47,15 +51,30 @@ export function Dashboard() {
     return map
   }, [accounts, operations])
 
-  const totalBalance = useMemo(() => {
+  // Общий баланс в base_currency: каждый счёт конвертим по последнему курсу.
+  // Если курса нет — пропускаем счёт и подсвечиваем это флагом.
+  const { totalBalance, missingRate } = useMemo(() => {
     let sum = 0
+    let missing = false
     for (const a of accounts) {
-      sum += balanceByAccount.get(a.id) ?? 0
+      const raw = balanceByAccount.get(a.id) ?? 0
+      if (a.currency === baseCurrency) {
+        sum += raw
+        continue
+      }
+      const conv = convertMoney(raw, a.currency, baseCurrency, ratesByDate)
+      if (conv === null) {
+        missing = true
+        continue
+      }
+      sum += conv
     }
-    return sum
-  }, [accounts, balanceByAccount])
+    return { totalBalance: sum, missingRate: missing }
+  }, [accounts, balanceByAccount, baseCurrency, ratesByDate])
 
+  // Месячные итоги — конвертим каждую операцию в base_currency на её дату.
   const monthTotals = useMemo(() => {
+    const accountById = new Map(accounts.map((a) => [a.id, a]))
     const now = new Date()
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
     let income = 0
@@ -63,11 +82,19 @@ export function Dashboard() {
     for (const op of operations) {
       if (op.occurred_at < monthStart) continue
       if (op.transfer_id !== null) continue // переводы не дают ни дохода, ни расхода
-      if (op.kind === 'income') income += Number(op.amount)
-      else expense += Number(op.amount)
+      const acc = accountById.get(op.account_id)
+      const currency = acc?.currency ?? baseCurrency
+      const amount = Number(op.amount)
+      const conv =
+        currency === baseCurrency
+          ? amount
+          : convertMoney(amount, currency, baseCurrency, ratesByDate, op.occurred_at)
+      if (conv === null) continue
+      if (op.kind === 'income') income += conv
+      else expense += conv
     }
     return { income, expense, net: income - expense }
-  }, [operations])
+  }, [operations, accounts, baseCurrency, ratesByDate])
 
   if (!household) return null
 
@@ -86,11 +113,15 @@ export function Dashboard() {
       </header>
 
       <section className="grid sm:grid-cols-2 gap-4">
-        <BigStat label="Общий баланс" value={formatMoney(totalBalance)} />
+        <BigStat
+          label="Общий баланс"
+          value={formatMoney(totalBalance, baseCurrency)}
+          sub={missingRate ? 'Некоторые счета не учтены — нет курса' : undefined}
+        />
         <BigStat
           label="Этот месяц"
-          value={formatMoney(monthTotals.net)}
-          sub={`+${formatMoney(monthTotals.income).replace(/[^\d.,]/g, '')} − ${formatMoney(monthTotals.expense).replace(/[^\d.,]/g, '')} ₪`}
+          value={formatMoney(monthTotals.net, baseCurrency)}
+          sub={`+${formatMoney(monthTotals.income, baseCurrency)} − ${formatMoney(monthTotals.expense, baseCurrency)}`}
           positive={monthTotals.net >= 0}
           negative={monthTotals.net < 0}
         />

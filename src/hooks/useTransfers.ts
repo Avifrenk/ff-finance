@@ -8,6 +8,8 @@ export interface CreateTransferInput {
   amount: number
   occurred_at: string
   note?: string | null
+  /** Сумма, фактически зачисленная на to-счёт (в его валюте). Если не задана — считается равной amount (та же валюта). */
+  to_amount?: number | null
 }
 
 export function useTransfers() {
@@ -22,6 +24,7 @@ export function useTransfers() {
         p_amount: input.amount,
         p_occurred_at: input.occurred_at,
         p_note: input.note ?? null,
+        p_to_amount: input.to_amount ?? null,
       })
       if (error) throw error
       window.dispatchEvent(new CustomEvent('ff:operations-changed'))
