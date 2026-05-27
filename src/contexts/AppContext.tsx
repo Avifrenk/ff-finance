@@ -65,7 +65,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       const { data: householdRow, error: householdErr } = await supabase
         .from('households')
-        .select('id, name, owner_id')
+        .select('id, name, owner_id, base_currency')
         .eq('id', membership.household_id)
         .single()
       if (householdErr) throw householdErr

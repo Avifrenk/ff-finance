@@ -35,19 +35,70 @@ export type Database = {
           id: string
           name: string
           owner_id: string
+          base_currency: string
           created_at: string
         }
         Insert: {
           id?: string
           name: string
           owner_id: string
+          base_currency?: string
           created_at?: string
         }
         Update: {
           id?: string
           name?: string
           owner_id?: string
+          base_currency?: string
           created_at?: string
+        }
+        Relationships: []
+      }
+      currencies: {
+        Row: {
+          code: string
+          symbol: string
+          name: string
+          decimals: number
+        }
+        Insert: {
+          code: string
+          symbol: string
+          name: string
+          decimals?: number
+        }
+        Update: {
+          code?: string
+          symbol?: string
+          name?: string
+          decimals?: number
+        }
+        Relationships: []
+      }
+      fx_rates: {
+        Row: {
+          base_code: string
+          quote_code: string
+          rate: number
+          as_of: string
+          source: string
+          fetched_at: string
+        }
+        Insert: {
+          base_code: string
+          quote_code: string
+          rate: number
+          as_of: string
+          source?: string
+          fetched_at?: string
+        }
+        Update: {
+          base_code?: string
+          quote_code?: string
+          rate?: number
+          as_of?: string
+          source?: string
+          fetched_at?: string
         }
         Relationships: []
       }
@@ -322,6 +373,7 @@ export type Database = {
           p_amount: number
           p_occurred_at?: string
           p_note?: string | null
+          p_to_amount?: number | null
         }
         Returns: string
       }

@@ -48,9 +48,9 @@ src/
 - [x] Личный кабинет vs семейный кабинет — переключение контекста
 - [x] Row Level Security (RLS) — каждый видит только своё + общее
 
-### Фаза 2 — Базовый учёт операций ✅ (без мультивалюты — см. ниже)
+### Фаза 2 — Базовый учёт операций ✅
 - [x] Таблицы: `accounts`, `categories`, `operations`, `transfers`, `operation_schedules`
-- [ ] Мультивалютность: таблица `currencies` + ежедневные курсы (через ECB API) — **вынесено в отдельную ветку `feat/multivalyuta`**
+- [x] Мультивалютность: `currencies` + `fx_rates` (ECB, EUR-cross) + `households.base_currency`; Edge Function `fetch-ecb-rates` + helper `convertMoney` + хук `useFxRates`; кросс-валютные переводы через `create_transfer(p_to_amount)`. ✅
 - [x] CRUD операций: добавить, изменить, удалить
 - [x] Категории по умолчанию под Израиль (арнона, ваад, купат-холим и т.д.)
 - [x] Флаг "приватная операция" (не показывать супруге) + двухуровневая приватность (visibility у счёта)
