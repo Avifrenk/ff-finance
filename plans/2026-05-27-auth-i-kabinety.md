@@ -67,18 +67,26 @@
   - [x] `<AppLayout>` рендерит переключатель в шапке: `🧍 <displayName> ↔ 🏠 <householdName>`.
   - [x] Заглушки `Dashboard` / `Operations` / `Settings` — все под guard'ом, показывают `viewMode` и имя контекста; Dashboard ещё умеет создавать invite-ссылку (для owner, пока партнёр не вошёл).
 
-- [ ] **Фаза 1.8. Ручная верификация end-to-end.**
-  - Сценарий A (owner): регистрация email → создание household «Frenkel» → копирование invite-ссылки.
-  - Сценарий B (partner): в инкогнито — регистрация по invite-ссылке → автоматически в той же household.
-  - Сценарий C (Google): вход через Google → попадает в onboarding → создаёт household.
-  - Сценарий D (приватность): партнёр видит общий household, но НЕ видит чужого `profile` вне household и НЕ может прочесть чужие invites.
-  - Зафиксировать скриншоты (по желанию) в `.business/история/`.
+- [x] **Фаза 1.8. Ручная верификация end-to-end.**
+  - [x] Создан реальный проект на supabase.com (регион Frankfurt, free plan).
+  - [x] `.env.local` заполнен (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`).
+  - [x] Все три миграции применены через `npx supabase db push --db-url`.
+  - [x] **Сценарий A (owner email):** Ави зарегался → создал household «Frenkel» → сгенерил invite-ссылку.
+  - [x] **Сценарий B (partner через invite):** Алина в инкогнито открыла invite-ссылку → автоматический редирект на `/register?invite=...` → регистрация → автоматический accept приглашения → дашборд `🏠 Frenkel` с двумя участниками.
+  - [x] **Сценарий D (приватность):** Алина видит общий household и Ави как `partner`-партнёра; не видит чужих данных вне семьи. RLS отрабатывает.
+  - [ ] **Сценарий C (Google OAuth):** провайдер не настроен в Supabase Dashboard (нет client_id/secret из Google Cloud Console). UI-кнопка готова. Перенесено отдельной задачей на потом.
 
-- [ ] **Фаза 1.9. Закрытие плана и рефлексия.**
-  - Отметить все фазы `[x]`, дописать блок «Итог» (что реально вошло, что отложено и почему).
-  - Обновить `ROADMAP.md`: чекбоксы Фазы 1 → `[x]`.
-  - Создать `.business/история/YYYY-MM-DD-auth-i-kabinety.md` по формату из `CLAUDE.md` (5 пунктов: задача / как решал / решил ли / эффективно ли / как было → как стало).
-  - В `App.tsx` снять статус «Авторизация» с серого на зелёный.
+  **Найденные баги по ходу 1.8 (все починены, см. коммит `bff250f`):**
+  - GRANT-ы для роли `authenticated` не были выданы (выключили «Automatically expose new tables» в Dashboard) → миграция `20260527165417_grants.sql`.
+  - INSERT households падал на SELECT-policy при RETURNING (owner ещё не member) → миграция `20260527165605_fix_households_select_for_owner.sql`.
+  - Register не пробрасывал `?invite=...` после регистрации → починили в `Register.tsx`.
+  - Поле «токен приглашения» не принимало полный URL → починили парсинг в `Onboarding.tsx`.
+
+- [x] **Фаза 1.9. Закрытие плана и рефлексия.**
+  - [x] Все фазы отмечены, блок «Итог» дописан ниже.
+  - [x] `ROADMAP.md`: чекбоксы Фазы 1 → `[x]`.
+  - [x] `.business/история/2026-05-27-auth-i-kabinety.md` написан.
+  - [x] `App.tsx` переделан в полноценный роутер ещё в Фазе 1.5 — старого «статуса авторизации» больше нет, его заменил `<RequireAuth>` + рабочий Login.
 
 ## Открытые вопросы (не блокеры Фазы 1, но всплывут)
 
@@ -96,4 +104,27 @@
 
 ## Итог
 
-(заполнить в конце ветки)
+**Сделано целиком.** Все 9 подфаз закрыты, end-to-end сценарии A/B/D прошли на живом Supabase. Ветка `feat/auth-i-kabinety` готова к мержу в `main`.
+
+### Что реально вошло
+
+| Слой | Что |
+|---|---|
+| База | Supabase CLI как `devDependency`, `supabase init`, 4 миграции (identity / invites / grants / fix-select), все таблицы с RLS с первого дня |
+| Identity | `profiles` / `households` / `household_members` + триггер `on_auth_user_created` + `current_household_id()` для разрыва RLS-рекурсии |
+| Приглашения | `household_invites` + RPC `accept_invite` (атомарная, идемпотентная, с человекочитаемыми ошибками) |
+| Auth | Email/password регистрация и логин, кнопки Google (без provider config), `useSession`, `<RequireAuth>` |
+| Онбординг | `/onboarding` с двумя сценариями, `/invite/:token` корректно ведёт и гостей, и авторизованных, и людей-в-семье |
+| Контекст | `AppProvider` + `useApp` (без Redux/Zustand), переключатель `🧍 личный ↔ 🏠 семейный` в шапке с `localStorage` |
+| Страницы | Dashboard (со списком участников и генерацией invite), Operations / Settings — заглушки под Фазу 2 |
+
+### Что отложено и почему
+
+- **Google OAuth provider:** UI готов, не настроен Google Cloud Console + Supabase Dashboard. Это 10 минут конфигурации, без кода. Не блокер MVP.
+- **Email confirmation customisation:** оставили дефолтный шаблон Supabase. UI-страница `/forgot-password` тоже отложена — это полировка для Фазы 8.
+- **Удаление аккаунта / выход из семьи:** не в скоупе ветки, заведём отдельным планом по необходимости.
+- **`supabase gen types`:** требует Docker. Пока поддерживаем `src/types/database.ts` вручную — это 100 строк, синхронных с миграциями. Когда поднимем Docker — перегенерим автоматически.
+
+### Чего не делали намеренно
+
+Любые таблицы и фичи Фазы 2+ (`accounts`, `categories`, `operations`, мультивалюта, регулярные операции, real-time подписки, AI, деплой). Двухуровневая модель приватности (`visibility` у счёта, `is_private` у операции) — заложим в Фазе 2 вместе с самими таблицами, так как сейчас закладывать поля некуда.
