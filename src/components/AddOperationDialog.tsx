@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useAccounts } from '../hooks/useAccounts'
 import { useCategories } from '../hooks/useCategories'
 import { useOperations, type CreateOperationInput } from '../hooks/useOperations'
+import { useTransfers } from '../hooks/useTransfers'
 import { AuthInput, ErrorBox, PrimaryButton, SecondaryButton } from './AuthControls'
 
-type OperationKind = 'expense' | 'income'
+type Tab = 'expense' | 'income' | 'transfer'
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10)
@@ -21,11 +22,13 @@ export function AddOperationDialog({
 }) {
   const { accounts } = useAccounts()
   const { categories } = useCategories()
-  const { create } = useOperations('month')
+  const { create: createOperation } = useOperations('month')
+  const { create: createTransfer } = useTransfers()
 
-  const [kind, setKind] = useState<OperationKind>('expense')
+  const [tab, setTab] = useState<Tab>('expense')
   const [amount, setAmount] = useState('')
   const [accountId, setAccountId] = useState('')
+  const [toAccountId, setToAccountId] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [occurredAt, setOccurredAt] = useState(todayIso())
   const [note, setNote] = useState('')
@@ -34,47 +37,53 @@ export function AddOperationDialog({
   const [busy, setBusy] = useState(false)
 
   const visibleAccounts = accounts // RLS уже отфильтровал
+  const kind: 'expense' | 'income' | null =
+    tab === 'expense' ? 'expense' : tab === 'income' ? 'income' : null
   const kindCategories = useMemo(
-    () => categories.filter((c) => c.kind === kind),
+    () => (kind ? categories.filter((c) => c.kind === kind) : []),
     [categories, kind],
   )
   const selectedAccount = visibleAccounts.find((a) => a.id === accountId)
+  const otherAccounts = visibleAccounts.filter((a) => a.id !== accountId)
 
-  // Сброс при открытии диалога — это legit form-reset, ESLint-предупреждение
-  // про cascading renders сюда не применимо.
+  /* eslint-disable react-hooks/set-state-in-effect --
+     все четыре эффекта ниже — legit form-reset / cascading-нормализация
+     полей при изменении табов/счёта. setState внутри useEffect здесь
+     осмысленный, новое поведение нового react-hooks плагина к нему
+     не применимо. */
+
+  // Form-reset при открытии.
   useEffect(() => {
     if (!open) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setKind('expense')
-     
+    setTab('expense')
     setAmount('')
-     
     setAccountId(visibleAccounts[0]?.id ?? '')
-     
+    setToAccountId('')
     setCategoryId('')
-     
     setOccurredAt(todayIso())
-     
     setNote('')
-     
     setIsPrivate(false)
-     
     setError(null)
   }, [open, visibleAccounts])
 
-  // При смене kind — сбросить категорию (она привязана к kind).
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCategoryId('')
-  }, [kind])
+  }, [tab])
 
-  // Если переключились на personal-счёт — снять приватность (она не имеет смысла).
   useEffect(() => {
     if (selectedAccount?.visibility !== 'shared') {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsPrivate(false)
     }
   }, [selectedAccount?.visibility])
+
+  // Если выбранный to-счёт совпал с from — сбросить.
+  useEffect(() => {
+    if (toAccountId && toAccountId === accountId) {
+      setToAccountId('')
+    }
+  }, [accountId, toAccountId])
+
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (!open) return null
 
@@ -87,26 +96,40 @@ export function AddOperationDialog({
       return
     }
     if (!accountId) {
-      setError('Выберите счёт')
+      setError(tab === 'transfer' ? 'Выберите счёт-источник' : 'Выберите счёт')
+      return
+    }
+    if (tab === 'transfer' && !toAccountId) {
+      setError('Выберите счёт-назначение')
       return
     }
 
     setBusy(true)
     try {
-      const input: CreateOperationInput = {
-        account_id: accountId,
-        category_id: categoryId || null,
-        kind,
-        amount: amountNum,
-        occurred_at: occurredAt,
-        note: note.trim() || null,
-        is_private: isPrivate,
+      if (tab === 'transfer') {
+        await createTransfer({
+          from_account_id: accountId,
+          to_account_id: toAccountId,
+          amount: amountNum,
+          occurred_at: occurredAt,
+          note: note.trim() || null,
+        })
+      } else {
+        const input: CreateOperationInput = {
+          account_id: accountId,
+          category_id: categoryId || null,
+          kind: tab,
+          amount: amountNum,
+          occurred_at: occurredAt,
+          note: note.trim() || null,
+          is_private: isPrivate,
+        }
+        await createOperation(input)
       }
-      await create(input)
       onCreated?.()
       onClose()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось сохранить')
+      setError(humaniseTransferError(e instanceof Error ? e.message : 'Не удалось сохранить'))
     } finally {
       setBusy(false)
     }
@@ -136,7 +159,7 @@ export function AddOperationDialog({
           <NoAccountsHint onClose={onClose} />
         ) : (
           <form onSubmit={submit} className="space-y-4">
-            <KindToggle value={kind} onChange={setKind} />
+            <TabToggle value={tab} onChange={setTab} />
 
             <div>
               <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -156,7 +179,7 @@ export function AddOperationDialog({
 
             <div>
               <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Счёт
+                {tab === 'transfer' ? 'Откуда' : 'Счёт'}
               </label>
               <Select value={accountId} onChange={setAccountId}>
                 {visibleAccounts.map((a) => (
@@ -168,20 +191,39 @@ export function AddOperationDialog({
               </Select>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Категория
-              </label>
-              <Select value={categoryId} onChange={setCategoryId}>
-                <option value="">— без категории —</option>
-                {kindCategories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.icon ? `${c.icon} ` : ''}
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
+            {tab === 'transfer' && (
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Куда
+                </label>
+                <Select value={toAccountId} onChange={setToAccountId}>
+                  <option value="">— выберите счёт —</option>
+                  {otherAccounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.visibility === 'shared' ? '🏠 ' : '🧍 '}
+                      {a.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
+
+            {tab !== 'transfer' && (
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Категория
+                </label>
+                <Select value={categoryId} onChange={setCategoryId}>
+                  <option value="">— без категории —</option>
+                  {kindCategories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.icon ? `${c.icon} ` : ''}
+                      {c.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -201,13 +243,15 @@ export function AddOperationDialog({
               </label>
               <AuthInput
                 type="text"
-                placeholder="Например: тиббулим, Лули, подарок маме"
+                placeholder={
+                  tab === 'transfer' ? 'Например: с зарплаты на копилку' : 'Например: тиббулим, Лули, подарок маме'
+                }
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
               />
             </div>
 
-            {selectedAccount?.visibility === 'shared' && (
+            {tab !== 'transfer' && selectedAccount?.visibility === 'shared' && (
               <label className="flex items-start gap-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -241,20 +285,23 @@ export function AddOperationDialog({
   )
 }
 
-function KindToggle({ value, onChange }: { value: OperationKind; onChange: (k: OperationKind) => void }) {
+function TabToggle({ value, onChange }: { value: Tab; onChange: (t: Tab) => void }) {
   return (
-    <div className="grid grid-cols-2 gap-2 p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800">
-      <KindButton active={value === 'expense'} onClick={() => onChange('expense')}>
+    <div className="grid grid-cols-3 gap-1 p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800">
+      <TabButton active={value === 'expense'} onClick={() => onChange('expense')}>
         💸 Расход
-      </KindButton>
-      <KindButton active={value === 'income'} onClick={() => onChange('income')}>
+      </TabButton>
+      <TabButton active={value === 'income'} onClick={() => onChange('income')}>
         💰 Доход
-      </KindButton>
+      </TabButton>
+      <TabButton active={value === 'transfer'} onClick={() => onChange('transfer')}>
+        ↔ Перевод
+      </TabButton>
     </div>
   )
 }
 
-function KindButton({
+function TabButton({
   active,
   onClick,
   children,
@@ -311,4 +358,12 @@ function NoAccountsHint({ onClose }: { onClose: () => void }) {
       <SecondaryButton onClick={onClose}>Закрыть</SecondaryButton>
     </div>
   )
+}
+
+function humaniseTransferError(raw: string): string {
+  if (raw.includes('SAME_ACCOUNT')) return 'Счёт-источник и счёт-назначение должны быть разными.'
+  if (raw.includes('ACCOUNT_NOT_VISIBLE')) return 'Один из счетов вам недоступен.'
+  if (raw.includes('INVALID_AMOUNT')) return 'Сумма должна быть положительной.'
+  if (raw.includes('NO_HOUSEHOLD')) return 'Сначала создайте или вступите в семью.'
+  return raw
 }

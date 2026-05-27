@@ -13,6 +13,7 @@ export interface Operation {
   occurred_at: string
   note: string | null
   is_private: boolean
+  transfer_id: string | null
   created_at: string
 }
 
@@ -67,7 +68,7 @@ export function useOperations(period: PeriodFilter = 'month') {
     let q = supabase
       .from('operations')
       .select(
-        'id, household_id, account_id, category_id, author_profile_id, kind, amount, occurred_at, note, is_private, created_at',
+        'id, household_id, account_id, category_id, author_profile_id, kind, amount, occurred_at, note, is_private, transfer_id, created_at',
       )
       .eq('household_id', household.id)
       .order('occurred_at', { ascending: false })
@@ -117,7 +118,7 @@ export function useOperations(period: PeriodFilter = 'month') {
           is_private: input.is_private ?? false,
         })
         .select(
-          'id, household_id, account_id, category_id, author_profile_id, kind, amount, occurred_at, note, is_private, created_at',
+          'id, household_id, account_id, category_id, author_profile_id, kind, amount, occurred_at, note, is_private, transfer_id, created_at',
         )
         .single()
       if (err) throw err

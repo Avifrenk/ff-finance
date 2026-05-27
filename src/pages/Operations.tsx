@@ -3,6 +3,7 @@ import { useApp } from '../contexts/useApp'
 import { useAccounts } from '../hooks/useAccounts'
 import { useCategories } from '../hooks/useCategories'
 import { useOperations, type Operation, type PeriodFilter } from '../hooks/useOperations'
+import { useTransfers } from '../hooks/useTransfers'
 import { ErrorBox } from '../components/AuthControls'
 import { formatDate, formatMoney } from '../lib/format'
 
@@ -13,14 +14,19 @@ const PERIOD_LABELS: Record<PeriodFilter, string> = {
   all: 'Всё',
 }
 
+type Row =
+  | { kind: 'op'; op: Operation }
+  | { kind: 'transfer'; transferId: string; from: Operation; to: Operation }
+
 export function Operations() {
   const { viewMode, household, profile, members } = useApp()
   const [period, setPeriod] = useState<PeriodFilter>('month')
-  const { operations: allOperations, loading, error, remove } = useOperations(period)
+  const { operations: allOperations, loading, error, remove: removeOperation } = useOperations(period)
+  const { remove: removeTransfer } = useTransfers()
   const { accounts: allAccounts } = useAccounts()
   const { categories } = useCategories()
 
-  // Та же viewMode-логика что в Dashboard.
+  // viewMode-фильтрация (см. Dashboard).
   const accounts = useMemo(() => {
     if (viewMode === 'personal') {
       return allAccounts.filter(
@@ -43,19 +49,59 @@ export function Operations() {
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
   const memberById = useMemo(() => new Map(members.map((m) => [m.profile_id, m])), [members])
 
+  // Группируем операции с одинаковым transfer_id в одну строку.
+  const rows = useMemo<Row[]>(() => {
+    const transferMap = new Map<string, { from?: Operation; to?: Operation }>()
+    const result: Row[] = []
+    for (const op of operations) {
+      if (op.transfer_id) {
+        const pair = transferMap.get(op.transfer_id) ?? {}
+        if (op.kind === 'expense') pair.from = op
+        else pair.to = op
+        transferMap.set(op.transfer_id, pair)
+      } else {
+        result.push({ kind: 'op', op })
+      }
+    }
+    for (const [transferId, pair] of transferMap) {
+      // Если видна только одна сторона перевода (например один счёт скрыт от
+      // viewMode) — показываем как обычную операцию.
+      if (pair.from && pair.to) {
+        result.push({ kind: 'transfer', transferId, from: pair.from, to: pair.to })
+      } else if (pair.from) {
+        result.push({ kind: 'op', op: pair.from })
+      } else if (pair.to) {
+        result.push({ kind: 'op', op: pair.to })
+      }
+    }
+    // Сортировка по дате (новые сверху).
+    result.sort((a, b) => {
+      const dateA = a.kind === 'op' ? a.op.occurred_at : a.from.occurred_at
+      const dateB = b.kind === 'op' ? b.op.occurred_at : b.from.occurred_at
+      if (dateA !== dateB) return dateB.localeCompare(dateA)
+      const createdA = a.kind === 'op' ? a.op.created_at : a.from.created_at
+      const createdB = b.kind === 'op' ? b.op.created_at : b.from.created_at
+      return createdB.localeCompare(createdA)
+    })
+    return result
+  }, [operations])
+
+  // Итоги: переводы не учитываются ни как доход, ни как расход.
   const totals = useMemo(() => {
-    const income = operations
-      .filter((o) => o.kind === 'income')
-      .reduce((sum, o) => sum + Number(o.amount), 0)
-    const expense = operations
-      .filter((o) => o.kind === 'expense')
-      .reduce((sum, o) => sum + Number(o.amount), 0)
+    const regular = operations.filter((o) => o.transfer_id === null)
+    const income = regular.filter((o) => o.kind === 'income').reduce((s, o) => s + Number(o.amount), 0)
+    const expense = regular.filter((o) => o.kind === 'expense').reduce((s, o) => s + Number(o.amount), 0)
     return { income, expense, net: income - expense }
   }, [operations])
 
-  async function handleDelete(op: Operation) {
+  async function handleDeleteOp(op: Operation) {
     if (!window.confirm('Удалить эту операцию?')) return
-    await remove(op.id)
+    await removeOperation(op.id)
+  }
+
+  async function handleDeleteTransfer(transferId: string) {
+    if (!window.confirm('Удалить перевод? Обе связанные операции тоже удалятся.')) return
+    await removeTransfer(transferId)
   }
 
   return (
@@ -79,14 +125,53 @@ export function Operations() {
 
       {loading && <p className="text-sm text-slate-500">Загрузка…</p>}
       {error && <ErrorBox>{error}</ErrorBox>}
-      {!loading && operations.length === 0 && (
+      {!loading && rows.length === 0 && (
         <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 p-8 text-center text-sm text-slate-500 dark:text-slate-400">
           За {PERIOD_LABELS[period].toLowerCase()} операций нет. Жми «+» внизу справа, чтобы добавить первую.
         </div>
       )}
 
       <ul className="space-y-1">
-        {operations.map((op) => {
+        {rows.map((row) => {
+          if (row.kind === 'transfer') {
+            const isMine = row.from.author_profile_id === profile?.id
+            const fromAcc = accountById.get(row.from.account_id)
+            const toAcc = accountById.get(row.to.account_id)
+            return (
+              <li
+                key={row.transferId}
+                className="flex items-center gap-3 py-3 px-3 rounded-lg hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors group"
+              >
+                <div className="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg">
+                  ↔
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                    Перевод
+                  </div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                    {formatDate(row.from.occurred_at)} ·{' '}
+                    {fromAcc ? fromAcc.name : '—'} → {toAcc ? toAcc.name : '—'}
+                    {row.from.note ? ` · ${row.from.note}` : ''}
+                  </div>
+                </div>
+                <div className="text-sm font-semibold whitespace-nowrap text-slate-900 dark:text-slate-100">
+                  {formatMoney(Number(row.from.amount), fromAcc?.currency ?? 'ILS')}
+                </div>
+                {isMine && (
+                  <button
+                    onClick={() => handleDeleteTransfer(row.transferId)}
+                    className="text-xs text-rose-500 hover:text-rose-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Удалить перевод"
+                  >
+                    ✕
+                  </button>
+                )}
+              </li>
+            )
+          }
+
+          const op = row.op
           const account = accountById.get(op.account_id)
           const category = op.category_id ? categoryById.get(op.category_id) : null
           const author = memberById.get(op.author_profile_id)
@@ -125,7 +210,7 @@ export function Operations() {
               </div>
               {isMine && (
                 <button
-                  onClick={() => handleDelete(op)}
+                  onClick={() => handleDeleteOp(op)}
                   className="text-xs text-rose-500 hover:text-rose-700 opacity-0 group-hover:opacity-100 transition-opacity"
                   title="Удалить"
                 >

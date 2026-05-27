@@ -180,6 +180,7 @@ export type Database = {
           occurred_at: string
           note: string | null
           is_private: boolean
+          transfer_id: string | null
           created_at: string
         }
         Insert: {
@@ -193,6 +194,7 @@ export type Database = {
           occurred_at?: string
           note?: string | null
           is_private?: boolean
+          transfer_id?: string | null
           created_at?: string
         }
         Update: {
@@ -206,6 +208,43 @@ export type Database = {
           occurred_at?: string
           note?: string | null
           is_private?: boolean
+          transfer_id?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      transfers: {
+        Row: {
+          id: string
+          household_id: string
+          from_account_id: string
+          to_account_id: string
+          amount: number
+          occurred_at: string
+          note: string | null
+          author_profile_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          household_id: string
+          from_account_id: string
+          to_account_id: string
+          amount: number
+          occurred_at?: string
+          note?: string | null
+          author_profile_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          household_id?: string
+          from_account_id?: string
+          to_account_id?: string
+          amount?: number
+          occurred_at?: string
+          note?: string | null
+          author_profile_id?: string
           created_at?: string
         }
         Relationships: []
@@ -224,6 +263,16 @@ export type Database = {
       seed_default_categories: {
         Args: { target_household_id: string }
         Returns: undefined
+      }
+      create_transfer: {
+        Args: {
+          p_from_account_id: string
+          p_to_account_id: string
+          p_amount: number
+          p_occurred_at?: string
+          p_note?: string | null
+        }
+        Returns: string
       }
     }
     Enums: Record<string, never>

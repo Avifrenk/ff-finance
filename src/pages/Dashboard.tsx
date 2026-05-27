@@ -60,6 +60,7 @@ export function Dashboard() {
     let expense = 0
     for (const op of operations) {
       if (op.occurred_at < monthStart) continue
+      if (op.transfer_id !== null) continue // переводы не дают ни дохода, ни расхода
       if (op.kind === 'income') income += Number(op.amount)
       else expense += Number(op.amount)
     }
