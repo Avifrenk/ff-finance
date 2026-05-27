@@ -1,16 +1,22 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { AuthCard, AuthInput, ErrorBox, GoogleButton, PrimaryButton } from '../components/AuthControls'
 
 export function Register() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const inviteToken = searchParams.get('invite') ?? ''
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [confirmSent, setConfirmSent] = useState(false)
+
+  const afterAuthPath = inviteToken
+    ? `/onboarding?mode=accept&token=${encodeURIComponent(inviteToken)}`
+    : '/'
 
   async function handleEmailRegister(e: FormEvent) {
     e.preventDefault()
@@ -33,14 +39,17 @@ export function Register() {
       setConfirmSent(true)
       return
     }
-    navigate('/', { replace: true })
+    navigate(afterAuthPath, { replace: true })
   }
 
   async function handleGoogle() {
     setError(null)
+    const redirectTo = inviteToken
+      ? `${window.location.origin}/auth/callback?invite=${encodeURIComponent(inviteToken)}`
+      : `${window.location.origin}/auth/callback`
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo },
     })
     if (error) setError(error.message)
   }

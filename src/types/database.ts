@@ -1,6 +1,7 @@
 // Ручные типы для Фазы 1.
-// После Фазы 1.8 заменим автогенерацией:
+// После установки Docker можно будет автоматически перегенерить:
 //   npx supabase gen types typescript --local > src/types/database.ts
+// Пока — поддерживаем вручную, синхронно с supabase/migrations/*.sql.
 
 export type Database = {
   public: {

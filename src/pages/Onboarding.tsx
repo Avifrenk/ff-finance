@@ -178,7 +178,8 @@ function AcceptInvite({
     setError(null)
     setBusy(true)
 
-    const { error: rpcErr } = await supabase.rpc('accept_invite', { invite_token: token.trim() })
+    const cleanToken = extractToken(token)
+    const { error: rpcErr } = await supabase.rpc('accept_invite', { invite_token: cleanToken })
 
     if (rpcErr) {
       setError(humaniseInviteError(rpcErr.message))
@@ -192,17 +193,17 @@ function AcceptInvite({
 
   return (
     <form onSubmit={submit} className="space-y-3">
-      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Токен приглашения</label>
+      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Приглашение</label>
       <AuthInput
         type="text"
-        placeholder="вставьте сюда токен из ссылки"
+        placeholder="вставьте ссылку или только токен"
         value={token}
         onChange={(e) => setToken(e.target.value)}
         required
         autoFocus
       />
       <p className="text-xs text-slate-500 dark:text-slate-400">
-        Партнёр прислал вам ссылку вида <code className="font-mono">/invite/&lt;токен&gt;</code> — вставьте токен сюда.
+        Можно вставить полную ссылку вида <code className="font-mono">…/invite/&lt;токен&gt;</code> — мы сами достанем токен.
       </p>
       {error && <ErrorBox>{error}</ErrorBox>}
       <div className="flex gap-2">
@@ -215,6 +216,13 @@ function AcceptInvite({
       </div>
     </form>
   )
+}
+
+function extractToken(input: string): string {
+  const trimmed = input.trim()
+  // Поддержка вставки полного URL вида http://host/invite/<token>?...
+  const match = trimmed.match(/\/invite\/([^/?#]+)/)
+  return match ? decodeURIComponent(match[1]) : trimmed
 }
 
 function humaniseInviteError(raw: string): string {
