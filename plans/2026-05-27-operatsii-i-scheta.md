@@ -82,7 +82,7 @@
   - В списке операций перевод отображается как одна строка «↔ Перевод», а не две.
   - Удаление перевода удаляет обе связанные операции атомарно.
 
-- [ ] **Фаза 2.9. Регулярные операции (`operation_schedules`).**
+- [x] **Фаза 2.9. Регулярные операции (`operation_schedules`).**
   - Миграция: таблица `operation_schedules` (id, household_id, account_id, category_id, kind, amount, cadence_rule text — типа `monthly:1` или `weekly:mon`, next_run_at date, last_run_at date nullable, is_active bool, author_profile_id, note nullable, is_private bool, created_at) + RLS.
   - Воркер: pg_cron + хранимая функция `tick_schedules()` — раз в день в 00:05 (по UTC) проходит по всем `is_active=true` schedules с `next_run_at <= today`, создаёт операцию, пересчитывает `next_run_at` по cadence_rule, апдейтит `last_run_at`.
   - UI: отдельный раздел в Settings → «Регулярные» — список + добавить/редактировать/выключить.

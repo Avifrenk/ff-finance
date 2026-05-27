@@ -1,8 +1,10 @@
-import { useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { useApp } from '../contexts/useApp'
 import { useAccounts, type Account } from '../hooks/useAccounts'
+import { useCategories } from '../hooks/useCategories'
+import { useSchedules, describeCadence, type Schedule } from '../hooks/useSchedules'
 import { AuthInput, ErrorBox, PrimaryButton, SecondaryButton } from '../components/AuthControls'
-import { formatMoney } from '../lib/format'
+import { formatDate, formatMoney } from '../lib/format'
 
 export function Settings() {
   const { profile, household, members, viewMode, signOut } = useApp()
@@ -24,6 +26,8 @@ export function Settings() {
 
       <AccountsSection />
 
+      <SchedulesSection />
+
       <button
         onClick={() => signOut()}
         className="text-sm text-rose-600 dark:text-rose-400 hover:underline"
@@ -31,6 +35,374 @@ export function Settings() {
         Выйти из аккаунта
       </button>
     </div>
+  )
+}
+
+function SchedulesSection() {
+  const { profile } = useApp()
+  const { accounts } = useAccounts()
+  const { categories } = useCategories()
+  const { schedules, loading, error, create, toggle, remove, tickNow } = useSchedules()
+  const [adding, setAdding] = useState(false)
+  const [tickInfo, setTickInfo] = useState<string | null>(null)
+  const [tickErr, setTickErr] = useState<string | null>(null)
+
+  const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts])
+  const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
+
+  async function handleToggle(s: Schedule) {
+    await toggle(s.id, !s.is_active)
+  }
+  async function handleDelete(s: Schedule) {
+    if (!window.confirm('Удалить регулярную операцию? Уже созданные операции останутся.')) return
+    await remove(s.id)
+  }
+  async function handleTickNow() {
+    setTickErr(null)
+    setTickInfo(null)
+    try {
+      const n = await tickNow()
+      setTickInfo(`Создано операций: ${n}`)
+    } catch (e) {
+      setTickErr(e instanceof Error ? e.message : 'Ошибка')
+    }
+  }
+
+  return (
+    <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-semibold text-slate-900 dark:text-slate-100">Регулярные</h2>
+        {!adding && (
+          <div className="flex items-center gap-3 text-sm">
+            <button
+              onClick={handleTickNow}
+              className="text-slate-500 dark:text-slate-400 hover:underline"
+              title="Дёрнуть воркер вручную (обычно раз в день в 00:05 UTC)"
+            >
+              ⟳ Прокрутить
+            </button>
+            <button
+              onClick={() => setAdding(true)}
+              className="text-indigo-600 dark:text-indigo-400 hover:underline"
+            >
+              + Добавить
+            </button>
+          </div>
+        )}
+      </div>
+
+      {tickInfo && <p className="text-xs text-emerald-600 dark:text-emerald-400 mb-2">{tickInfo}</p>}
+      {tickErr && <ErrorBox>{tickErr}</ErrorBox>}
+
+      {loading && <p className="text-sm text-slate-500">Загрузка…</p>}
+      {error && <ErrorBox>{error}</ErrorBox>}
+
+      {!loading && schedules.length === 0 && !adding && (
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Нет регулярных операций. Добавьте зарплату, аренду или подписки — каждый день в
+          00:05 UTC воркер создаёт настоящие операции по расписанию.
+        </p>
+      )}
+
+      {schedules.length > 0 && (
+        <ul className="divide-y divide-slate-200 dark:divide-slate-700 -my-2">
+          {schedules.map((s) => {
+            const account = accountById.get(s.account_id)
+            const category = s.category_id ? categoryById.get(s.category_id) : null
+            const isMine = s.author_profile_id === profile?.id
+            return (
+              <li key={s.id} className="py-3 flex items-center gap-3">
+                <div
+                  className={`h-9 w-9 rounded-full flex items-center justify-center text-sm ${
+                    s.is_active
+                      ? 'bg-indigo-100 dark:bg-indigo-900/40'
+                      : 'bg-slate-100 dark:bg-slate-800 opacity-60'
+                  }`}
+                >
+                  {category?.icon ?? (s.kind === 'expense' ? '💸' : '💰')}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                    {category?.name ?? (s.kind === 'expense' ? 'Расход' : 'Доход')}
+                    {!s.is_active && <span className="ml-2 text-xs text-slate-400">(выключено)</span>}
+                  </div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                    {describeCadence(s.cadence_rule)} ·{' '}
+                    {account ? (account.visibility === 'shared' ? '🏠 ' : '🧍 ') + account.name : '—'} ·
+                    след. {formatDate(s.next_run_at)}
+                  </div>
+                </div>
+                <div
+                  className={`text-sm font-semibold whitespace-nowrap ${
+                    s.kind === 'expense'
+                      ? 'text-slate-900 dark:text-slate-100'
+                      : 'text-emerald-600 dark:text-emerald-400'
+                  }`}
+                >
+                  {s.kind === 'expense' ? '−' : '+'}
+                  {formatMoney(Number(s.amount), account?.currency ?? 'ILS').replace('−', '')}
+                </div>
+                {isMine && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <button
+                      onClick={() => handleToggle(s)}
+                      className="text-slate-500 dark:text-slate-400 hover:underline"
+                      title={s.is_active ? 'Выключить' : 'Включить'}
+                    >
+                      {s.is_active ? 'выкл' : 'вкл'}
+                    </button>
+                    <button
+                      onClick={() => handleDelete(s)}
+                      className="text-rose-500 hover:underline"
+                    >
+                      удалить
+                    </button>
+                  </div>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      {adding && (
+        <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+          <AddScheduleForm
+            onDone={() => setAdding(false)}
+            create={create}
+            accounts={accounts}
+            categories={categories}
+          />
+        </div>
+      )}
+    </section>
+  )
+}
+
+function AddScheduleForm({
+  onDone,
+  create,
+  accounts,
+  categories,
+}: {
+  onDone: () => void
+  create: (input: {
+    account_id: string
+    category_id: string | null
+    kind: 'expense' | 'income'
+    amount: number
+    cadence_rule: string
+    next_run_at: string
+    note?: string | null
+    is_private?: boolean
+  }) => Promise<unknown>
+  accounts: { id: string; name: string; visibility: 'personal' | 'shared' }[]
+  categories: { id: string; name: string; kind: 'expense' | 'income'; icon: string | null }[]
+}) {
+  const [kind, setKind] = useState<'expense' | 'income'>('expense')
+  const [amount, setAmount] = useState('')
+  const [accountId, setAccountId] = useState(accounts[0]?.id ?? '')
+  const [categoryId, setCategoryId] = useState('')
+  const [cadenceKind, setCadenceKind] = useState<'daily' | 'weekly' | 'monthly'>('monthly')
+  const [cadenceArg, setCadenceArg] = useState('1')
+  const [nextRunAt, setNextRunAt] = useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() + 1)
+    return d.toISOString().slice(0, 10)
+  })
+  const [note, setNote] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const kindCategories = categories.filter((c) => c.kind === kind)
+  const cadence_rule = cadenceKind === 'daily' ? 'daily' : `${cadenceKind}:${cadenceArg}`
+
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+    const amountNum = Number(amount.replace(',', '.'))
+    if (!isFinite(amountNum) || amountNum <= 0) {
+      setError('Сумма должна быть положительной')
+      return
+    }
+    if (!accountId) {
+      setError('Выберите счёт')
+      return
+    }
+    setBusy(true)
+    try {
+      await create({
+        account_id: accountId,
+        category_id: categoryId || null,
+        kind,
+        amount: amountNum,
+        cadence_rule,
+        next_run_at: nextRunAt,
+        note: note.trim() || null,
+      })
+      onDone()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось сохранить')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <div className="grid grid-cols-2 gap-2 p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800">
+        <button
+          type="button"
+          onClick={() => setKind('expense')}
+          className={`py-1.5 text-sm font-medium rounded-md ${
+            kind === 'expense'
+              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
+              : 'text-slate-500'
+          }`}
+        >
+          💸 Расход
+        </button>
+        <button
+          type="button"
+          onClick={() => setKind('income')}
+          className={`py-1.5 text-sm font-medium rounded-md ${
+            kind === 'income'
+              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
+              : 'text-slate-500'
+          }`}
+        >
+          💰 Доход
+        </button>
+      </div>
+
+      <Field label="Сумма">
+        <AuthInput
+          type="text"
+          inputMode="decimal"
+          placeholder="0"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          required
+        />
+      </Field>
+
+      <Field label="Счёт">
+        <SelectBox value={accountId} onChange={setAccountId}>
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.visibility === 'shared' ? '🏠 ' : '🧍 '}
+              {a.name}
+            </option>
+          ))}
+        </SelectBox>
+      </Field>
+
+      <Field label="Категория">
+        <SelectBox value={categoryId} onChange={setCategoryId}>
+          <option value="">— без категории —</option>
+          {kindCategories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.icon ? `${c.icon} ` : ''}
+              {c.name}
+            </option>
+          ))}
+        </SelectBox>
+      </Field>
+
+      <Field label="Периодичность">
+        <div className="flex gap-2">
+          <SelectBox value={cadenceKind} onChange={(v) => setCadenceKind(v as 'daily' | 'weekly' | 'monthly')}>
+            <option value="monthly">Ежемесячно</option>
+            <option value="weekly">Еженедельно</option>
+            <option value="daily">Ежедневно</option>
+          </SelectBox>
+          {cadenceKind === 'monthly' && (
+            <SelectBox value={cadenceArg} onChange={setCadenceArg}>
+              {Array.from({ length: 28 }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n.toString()}>
+                  {n}-е число
+                </option>
+              ))}
+            </SelectBox>
+          )}
+          {cadenceKind === 'weekly' && (
+            <SelectBox value={cadenceArg} onChange={setCadenceArg}>
+              {[
+                ['1', 'понедельник'],
+                ['2', 'вторник'],
+                ['3', 'среда'],
+                ['4', 'четверг'],
+                ['5', 'пятница'],
+                ['6', 'суббота'],
+                ['0', 'воскресенье'],
+              ].map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
+            </SelectBox>
+          )}
+        </div>
+      </Field>
+
+      <Field label="Первый запуск">
+        <AuthInput
+          type="date"
+          value={nextRunAt}
+          onChange={(e) => setNextRunAt(e.target.value)}
+          required
+        />
+      </Field>
+
+      <Field label="Заметка (необязательно)">
+        <AuthInput
+          type="text"
+          placeholder="Например: зарплата, аренда, Netflix"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
+      </Field>
+
+      {error && <ErrorBox>{error}</ErrorBox>}
+
+      <div className="flex gap-2">
+        <SecondaryButton type="button" onClick={onDone}>
+          Отмена
+        </SecondaryButton>
+        <PrimaryButton type="submit" disabled={busy || !accountId}>
+          {busy ? 'Сохраняем…' : 'Создать'}
+        </PrimaryButton>
+      </div>
+    </form>
+  )
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">{label}</label>
+      {children}
+    </div>
+  )
+}
+
+function SelectBox({
+  value,
+  onChange,
+  children,
+}: {
+  value: string
+  onChange: (v: string) => void
+  children: React.ReactNode
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500"
+    >
+      {children}
+    </select>
   )
 }
 

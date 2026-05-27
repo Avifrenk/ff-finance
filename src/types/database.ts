@@ -213,6 +213,57 @@ export type Database = {
         }
         Relationships: []
       }
+      operation_schedules: {
+        Row: {
+          id: string
+          household_id: string
+          account_id: string
+          category_id: string | null
+          author_profile_id: string
+          kind: 'expense' | 'income'
+          amount: number
+          cadence_rule: string
+          next_run_at: string
+          last_run_at: string | null
+          is_active: boolean
+          note: string | null
+          is_private: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          household_id: string
+          account_id: string
+          category_id?: string | null
+          author_profile_id: string
+          kind: 'expense' | 'income'
+          amount: number
+          cadence_rule: string
+          next_run_at: string
+          last_run_at?: string | null
+          is_active?: boolean
+          note?: string | null
+          is_private?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          household_id?: string
+          account_id?: string
+          category_id?: string | null
+          author_profile_id?: string
+          kind?: 'expense' | 'income'
+          amount?: number
+          cadence_rule?: string
+          next_run_at?: string
+          last_run_at?: string | null
+          is_active?: boolean
+          note?: string | null
+          is_private?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
       transfers: {
         Row: {
           id: string
@@ -273,6 +324,14 @@ export type Database = {
           p_note?: string | null
         }
         Returns: string
+      }
+      compute_next_run_at: {
+        Args: { p_cadence_rule: string; p_from_date: string }
+        Returns: string
+      }
+      tick_schedules: {
+        Args: Record<string, never>
+        Returns: number
       }
     }
     Enums: Record<string, never>
