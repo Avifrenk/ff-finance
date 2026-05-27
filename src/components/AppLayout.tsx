@@ -1,9 +1,12 @@
+import { useState } from 'react'
 import { Link, Navigate, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useApp, type ViewMode } from '../contexts/useApp'
+import { AddOperationDialog } from './AddOperationDialog'
 
 export function AppLayout() {
   const { household, viewMode, setViewMode, profile, signOut } = useApp()
   const location = useLocation()
+  const [addOpen, setAddOpen] = useState(false)
 
   // Нет household — гнать в онбординг (кроме страниц самого онбординга и invite).
   if (!household && !location.pathname.startsWith('/onboarding') && !location.pathname.startsWith('/invite')) {
@@ -44,9 +47,19 @@ export function AppLayout() {
         </div>
       </header>
 
-      <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-6">
+      <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-6 pb-24">
         <Outlet />
       </main>
+
+      <button
+        onClick={() => setAddOpen(true)}
+        className="fixed bottom-6 right-6 h-14 w-14 rounded-full bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 text-white text-2xl shadow-lg shadow-indigo-500/30 transition-colors flex items-center justify-center"
+        aria-label="Добавить операцию"
+      >
+        +
+      </button>
+
+      <AddOperationDialog open={addOpen} onClose={() => setAddOpen(false)} />
     </div>
   )
 }
