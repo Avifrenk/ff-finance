@@ -44,9 +44,10 @@ export function Register() {
 
   async function handleGoogle() {
     setError(null)
+    const baseUrl = `${window.location.origin}${import.meta.env.BASE_URL}`
     const redirectTo = inviteToken
-      ? `${window.location.origin}/auth/callback?invite=${encodeURIComponent(inviteToken)}`
-      : `${window.location.origin}/auth/callback`
+      ? `${baseUrl}auth/callback?invite=${encodeURIComponent(inviteToken)}`
+      : `${baseUrl}auth/callback`
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo },

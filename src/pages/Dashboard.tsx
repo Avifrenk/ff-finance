@@ -435,7 +435,7 @@ function InviteSection() {
       setInviteError(error?.message ?? 'Не удалось создать приглашение')
       return
     }
-    setInviteUrl(`${window.location.origin}/invite/${data.token}`)
+    setInviteUrl(`${window.location.origin}${import.meta.env.BASE_URL}invite/${data.token}`)
     await refresh()
   }
 
