@@ -11,10 +11,20 @@ html, body, #root {
   margin: 0;
 }
 
+/* Базовый шрифт — крупнее на мобильных, чтобы UI читался без масштабирования.
+   17px = стандарт iOS, 16px — десктоп. */
+html {
+  font-size: 17px;
+}
+@media (min-width: 1024px) {
+  html { font-size: 16px; }
+}
+
 body {
   font-family: var(--font-sans);
   background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
   color: #0f172a;
+  -webkit-text-size-adjust: 100%;
 }
 
 @media (prefers-color-scheme: dark) {

@@ -21,7 +21,7 @@ export function AppLayout() {
       >
         <div className="max-w-5xl mx-auto px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-4">
           <Link to="/" className="flex items-center gap-2 font-semibold shrink-0">
-            <span className="h-7 w-7 rounded-lg bg-indigo-500 text-white flex items-center justify-center text-sm">
+            <span className="h-8 w-8 rounded-lg bg-indigo-500 text-white flex items-center justify-center text-base">
               ₪
             </span>
             <span className="text-slate-900 dark:text-slate-100 hidden sm:inline">FF Finance</span>
@@ -36,7 +36,8 @@ export function AppLayout() {
             />
           )}
 
-          <nav className="ml-auto flex items-center gap-0.5 sm:gap-1 text-sm">
+          {/* Десктоп: nav в шапке */}
+          <nav className="ml-auto hidden md:flex items-center gap-1 text-sm">
             <NavItem to="/" icon="📊" label="Дашборд" />
             <NavItem to="/operations" icon="📝" label="Операции" />
             <NavItem to="/goals" icon="🎯" label="Цели" />
@@ -45,28 +46,50 @@ export function AppLayout() {
             <NavItem to="/settings" icon="⚙️" label="Настройки" />
             <button
               onClick={() => signOut()}
-              aria-label="Выйти"
-              title="Выйти"
-              className="ml-1 sm:ml-2 px-2 sm:px-3 py-1.5 rounded-md text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="ml-2 px-3 py-1.5 rounded-md text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
-              <span className="sm:hidden text-base leading-none">🚪</span>
-              <span className="hidden sm:inline">Выйти</span>
+              Выйти
             </button>
           </nav>
+
+          {/* Мобайл: только выйти в шапке (nav внизу) */}
+          <button
+            onClick={() => signOut()}
+            aria-label="Выйти"
+            title="Выйти"
+            className="md:hidden ml-auto p-2 rounded-md text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            <span className="text-xl leading-none">🚪</span>
+          </button>
         </div>
       </header>
 
       <main
-        className="flex-1 max-w-5xl w-full mx-auto px-4 py-6"
-        style={{ paddingBottom: 'max(6rem, calc(env(safe-area-inset-bottom) + 5rem))' }}
+        className="flex-1 max-w-5xl w-full mx-auto px-4 py-6 pb-32 md:pb-12"
+        style={{ paddingBottom: 'max(8rem, calc(env(safe-area-inset-bottom) + 7rem))' }}
       >
         <Outlet />
       </main>
 
+      {/* Bottom tab bar — только на мобайле */}
+      <nav
+        className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        <div className="grid grid-cols-6 gap-0.5 px-1 py-1.5">
+          <TabItem to="/" icon="📊" label="Дашборд" />
+          <TabItem to="/operations" icon="📝" label="Операции" />
+          <TabItem to="/goals" icon="🎯" label="Цели" />
+          <TabItem to="/crypto" icon="🪙" label="Крипта" />
+          <TabItem to="/debts" icon="🤝" label="Долги" />
+          <TabItem to="/settings" icon="⚙️" label="Настройки" />
+        </div>
+      </nav>
+
       <button
         onClick={() => setAddOpen(true)}
-        className="fixed right-6 h-14 w-14 rounded-full bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 text-white text-2xl shadow-lg shadow-indigo-500/30 transition-colors flex items-center justify-center"
-        style={{ bottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 0.5rem))' }}
+        className="fixed right-5 h-14 w-14 rounded-full bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 text-white text-3xl shadow-lg shadow-indigo-500/30 transition-colors flex items-center justify-center z-50"
+        style={{ bottom: 'calc(env(safe-area-inset-bottom) + 5rem)' }}
         aria-label="Добавить операцию"
       >
         +
@@ -77,23 +100,40 @@ export function AppLayout() {
   )
 }
 
+function TabItem({ to, icon, label }: { to: string; icon: string; label: string }) {
+  return (
+    <NavLink
+      to={to}
+      end
+      className={({ isActive }) =>
+        `flex flex-col items-center justify-center gap-0.5 py-1 rounded-md transition-colors ${
+          isActive
+            ? 'text-indigo-700 dark:text-indigo-300 bg-indigo-500/10'
+            : 'text-slate-500 dark:text-slate-400'
+        }`
+      }
+    >
+      <span className="text-xl leading-none">{icon}</span>
+      <span className="text-[10px] leading-tight font-medium">{label}</span>
+    </NavLink>
+  )
+}
+
 function NavItem({ to, icon, label }: { to: string; icon: string; label: string }) {
   return (
     <NavLink
       to={to}
       end
-      aria-label={label}
-      title={label}
       className={({ isActive }) =>
-        `px-2 sm:px-3 py-1.5 rounded-md transition-colors ${
+        `inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${
           isActive
             ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300'
             : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800'
         }`
       }
     >
-      <span className="sm:hidden text-base leading-none">{icon}</span>
-      <span className="hidden sm:inline">{label}</span>
+      <span aria-hidden>{icon}</span>
+      <span>{label}</span>
     </NavLink>
   )
 }
