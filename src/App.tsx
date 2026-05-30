@@ -10,6 +10,8 @@ import { Onboarding } from './pages/Onboarding'
 import { Dashboard } from './pages/Dashboard'
 import { Operations } from './pages/Operations'
 import { Goals } from './pages/Goals'
+import { Crypto } from './pages/Crypto'
+import { CryptoTax } from './pages/CryptoTax'
 import { Settings } from './pages/Settings'
 
 function App() {
@@ -28,6 +30,8 @@ function App() {
               <Route index element={<Dashboard />} />
               <Route path="operations" element={<Operations />} />
               <Route path="goals" element={<Goals />} />
+              <Route path="crypto" element={<Crypto />} />
+              <Route path="crypto/tax" element={<CryptoTax />} />
               <Route path="settings" element={<Settings />} />
             </Route>
           </Route>
