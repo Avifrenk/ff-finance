@@ -9,6 +9,7 @@ import { Invite } from './pages/Invite'
 import { Onboarding } from './pages/Onboarding'
 import { Dashboard } from './pages/Dashboard'
 import { Operations } from './pages/Operations'
+import { Goals } from './pages/Goals'
 import { Settings } from './pages/Settings'
 
 function App() {
@@ -26,6 +27,7 @@ function App() {
             <Route element={<AppLayout />}>
               <Route index element={<Dashboard />} />
               <Route path="operations" element={<Operations />} />
+              <Route path="goals" element={<Goals />} />
               <Route path="settings" element={<Settings />} />
             </Route>
           </Route>

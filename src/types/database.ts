@@ -384,6 +384,90 @@ export type Database = {
         }
         Relationships: []
       }
+      goals: {
+        Row: {
+          id: string
+          household_id: string
+          owner_profile_id: string
+          name: string
+          target_amount: number
+          target_date: string | null
+          visibility: 'personal' | 'shared'
+          auto_percent_of_income: number
+          icon: string | null
+          color: string | null
+          is_archived: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          household_id: string
+          owner_profile_id: string
+          name: string
+          target_amount: number
+          target_date?: string | null
+          visibility?: 'personal' | 'shared'
+          auto_percent_of_income?: number
+          icon?: string | null
+          color?: string | null
+          is_archived?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          household_id?: string
+          owner_profile_id?: string
+          name?: string
+          target_amount?: number
+          target_date?: string | null
+          visibility?: 'personal' | 'shared'
+          auto_percent_of_income?: number
+          icon?: string | null
+          color?: string | null
+          is_archived?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      goal_contributions: {
+        Row: {
+          id: string
+          goal_id: string
+          amount: number
+          occurred_at: string
+          author_profile_id: string
+          source: 'manual' | 'auto'
+          source_operation_id: string | null
+          note: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          goal_id: string
+          amount: number
+          occurred_at?: string
+          author_profile_id: string
+          source?: 'manual' | 'auto'
+          source_operation_id?: string | null
+          note?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          goal_id?: string
+          amount?: number
+          occurred_at?: string
+          author_profile_id?: string
+          source?: 'manual' | 'auto'
+          source_operation_id?: string | null
+          note?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: {
@@ -416,6 +500,19 @@ export type Database = {
       }
       tick_schedules: {
         Args: Record<string, never>
+        Returns: number
+      }
+      convert_to_base: {
+        Args: {
+          p_amount: number
+          p_from_currency: string
+          p_base_currency: string
+          p_on_date: string
+        }
+        Returns: number | null
+      }
+      apply_auto_goal_contributions: {
+        Args: { p_operation_id: string }
         Returns: number
       }
     }
