@@ -325,6 +325,7 @@ export type Database = {
           occurred_at: string
           note: string | null
           author_profile_id: string
+          is_debt_settlement: boolean
           created_at: string
         }
         Insert: {
@@ -336,6 +337,7 @@ export type Database = {
           occurred_at?: string
           note?: string | null
           author_profile_id: string
+          is_debt_settlement?: boolean
           created_at?: string
         }
         Update: {
@@ -347,6 +349,7 @@ export type Database = {
           occurred_at?: string
           note?: string | null
           author_profile_id?: string
+          is_debt_settlement?: boolean
           created_at?: string
         }
         Relationships: []
@@ -617,6 +620,7 @@ export type Database = {
           p_occurred_at?: string
           p_note?: string | null
           p_to_amount?: number | null
+          p_is_debt_settlement?: boolean
         }
         Returns: string
       }
