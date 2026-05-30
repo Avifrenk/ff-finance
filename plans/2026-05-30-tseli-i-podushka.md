@@ -135,7 +135,7 @@ UX-фильтр Фазы 3 («поймёт ли жена с первого ра�
     - В `tick_schedules`: после `insert into operations … returning id`, для income-операции вызвать `apply_auto_goal_contributions(new_id)`. Для expense — не вызывать.
   - Ручной триггер: на странице Goals или Settings — кнопка «Прокрутить расписания сейчас» вызывает `supabase.rpc('tick_schedules')`. Если такая кнопка уже есть в Фазе 2.9 — переиспользуем, ничего нового.
 
-- [ ] **Фаза 4.6. Виджет подушки безопасности на Dashboard.**
+- [x] **Фаза 4.6. Виджет подушки безопасности на Dashboard.**
   - Новый компонент `src/components/SafetyCushion.tsx`:
     - Принимает `monthlyExpenses` (массив `{ yyyymm, expense }`) и `totalBalance`, обе цифры в `base_currency`.
     - Считает `safetyCushion()` из `lib/goals.ts`.

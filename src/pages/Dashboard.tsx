@@ -14,6 +14,7 @@ import { MonthCompareCards } from '../components/MonthCompareCards'
 import { CategoryBreakdown } from '../components/CategoryBreakdown'
 import { BudgetsProgress } from '../components/BudgetsProgress'
 import { PaymentsCalendar } from '../components/PaymentsCalendar'
+import { SafetyCushion } from '../components/SafetyCushion'
 import { formatMoney } from '../lib/format'
 import { convertMoney } from '../lib/fx'
 import {
@@ -25,6 +26,7 @@ import {
   last30DaysRange,
   quarterToDateRange,
 } from '../lib/aggregate'
+import { lastFullMonthKeys, type MonthlyExpense } from '../lib/goals'
 import type { Category } from '../hooks/useCategories'
 
 export function Dashboard() {
@@ -185,6 +187,18 @@ export function Dashboard() {
     [operations, accountById, categoryById, baseCurrency, ratesByDate, budgetMonthRange],
   )
 
+  // Последние 3 полных месяца → расходы за каждый, в base_currency.
+  // Подушка считается по этим трём, текущий неполный месяц не учитывается.
+  const monthlyExpenses = useMemo<MonthlyExpense[]>(() => {
+    const keys = lastFullMonthKeys(3)
+    return keys.map((yyyymm) => {
+      const [y, m] = yyyymm.split('-').map(Number)
+      const range = monthRange(new Date(y, m - 1, 15))
+      const totals = monthTotals(operations, accountById, baseCurrency, ratesByDate, range)
+      return { yyyymm, expense: totals.expense }
+    })
+  }, [operations, accountById, baseCurrency, ratesByDate])
+
   // Расписания: тот же viewMode-фильтр (личное — только мои на моих personal).
   const visibleSchedules = useMemo(() => {
     return schedules.filter((s) => {
@@ -226,6 +240,12 @@ export function Dashboard() {
           </div>
         )}
       </section>
+
+      <SafetyCushion
+        monthlyExpenses={monthlyExpenses}
+        totalBalance={totalBalance}
+        baseCurrency={baseCurrency}
+      />
 
       <div className="flex items-center gap-3">
         <PeriodPicker value={period} onChange={setPeriod} />
