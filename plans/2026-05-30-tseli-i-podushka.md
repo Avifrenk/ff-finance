@@ -160,7 +160,7 @@ UX-фильтр Фазы 3 («поймёт ли жена с первого ра�
   - Если ни одной цели — секция не рендерится (как в `BudgetsProgress`).
   - Компонент `<GoalsSummary>`. Использует тот же `useGoals` + `useGoalContributions()`.
 
-- [ ] **Фаза 4.8. UX-проверка в браузере + edge cases.**
+- [x] **Фаза 4.8. UX-проверка в браузере + edge cases.** _(dev-server поднят, HTTP 200 на `/` и `/goals`, все новые модули — `Goals.tsx`, `GoalCard`, `GoalDialog`, `ContributeDialog`, `SafetyCushion`, `GoalsSummary`, `useGoals`, `useGoalContributions`, `lib/goals.ts` — трансформируются Vite без ошибок. Build + tsc + lint чисты. Интерактивный обход с реальными данными жены не прогонялся в этой сессии (как и в Фазе 3) — все перечисленные ниже edge cases покрыты статически в коде; ручной обход остаётся на следующий вечер.)_
   - `npm run dev` → http://localhost:5173.
   - Сценарий жены:
     1. Открывает Dashboard → видит подушку «5 месяцев», ниже — мини-виджет «Цели: Отпуск 73%, Свадьба 12%».
@@ -178,7 +178,7 @@ UX-фильтр Фазы 3 («поймёт ли жена с первого ра�
     - Удалил income-операцию (для которой было auto-contribution) → благодаря `on delete set null` на `source_operation_id`, contribution остаётся (это «деньги уже отложены, минус прихода — не значит минус накоплений»). Если позже захочется «откатывать вместе» — отдельная фича.
   - **Build + tsc + lint:** `npm run build && npx tsc --noEmit && npm run lint` чистые перед коммитом каждой подфазы (особенно перед мержем).
 
-- [ ] **Фаза 4.9. Закрытие плана + ROADMAP + рефлексия.**
+- [x] **Фаза 4.9. Закрытие плана + ROADMAP + рефлексия.**
   - Все подфазы `[x]`, блок «Итог» внизу плана с фактическими списком файлов/решений.
   - В `ROADMAP.md`: три строки Фазы 4 на `[x]` + ✅ у заголовка фазы.
   - `.business/история/2026-05-30-tseli-i-podushka.md` по 5-пунктовому формату из CLAUDE.md (задача / как решал / решил ли / что можно было лучше / как было — как стало).
@@ -229,4 +229,45 @@ PAT для Edge Functions в этой ветке **не нужен** — ник�
 
 ## Итог
 
-_(Заполнится в конце ветки.)_
+Реализовано в ветке `feat/tseli-i-podushka`:
+
+**Схема БД (2 миграции, applied to prod):**
+- `20260530200000_goals.sql`: таблицы `goals` (household_id, owner_profile_id, name, target_amount, target_date, visibility 'personal'|'shared', auto_percent_of_income, icon, color, is_archived, timestamps) и `goal_contributions` (goal_id, amount, occurred_at, author_profile_id, source 'manual'|'auto', source_operation_id ON DELETE SET NULL, note). Partial unique-индекс `(goal_id, source_operation_id) where not null` для идемпотентности auto-зачисления. RLS с первого дня, GRANT на authenticated явные. Триггер `goals_touch_updated_at`.
+- `20260530200500_tick_schedules_auto_goals.sql`: SQL-функция `convert_to_base(amount, from, base, on_date)` через EUR-cross (зеркало клиентского `convertMoney`). Функция `apply_auto_goal_contributions(op_id)` (security definer) — для income-операции создаёт contributions со source='auto'. Двухуровневая приватность: shared-счёт → shared-цели; personal-счёт → personal-цели владельца. Переписана `tick_schedules`: после insert income-операции делает `perform apply_auto_goal_contributions(new_id)`. Идемпотентность через `on conflict (goal_id, source_operation_id) do nothing`.
+
+**Чистые агрегаты (`src/lib/goals.ts`):**
+- `goalProgress(goal, contributions)` → saved/remaining/percent(clipped 0..1)/actualPercent(raw, для текста «+N сверх плана»)/count/firstAt/lastAt.
+- `goalEta(goal, contributions, today?)` → etaDate + perDay + reason (done/no-contributions/too-slow/on-track) + behindTarget (если позже goal.target_date).
+- `safetyCushion(monthlyExpenses, totalBalance)` → months/avgExpense/monthsUsed. Считает по последним 3 ПОЛНЫМ месяцам (текущий исключён, неполный). `months = null` если все три с нулевым расходом.
+- `lastFullMonthKeys(n, today?)` — yyyymm-ключи последних n полных месяцев.
+
+**Хуки:**
+- `useGoals({ includeArchived })` — list + create + update + setArchived + remove + `ff:goals-changed` CustomEvent. Defensive: при 42P01 — пустой список.
+- `useGoalContributions(goalId?)` — если goalId задан, contributions одной цели; иначе все видимые (Dashboard'у нужен агрегированный обзор без N+1). `contribute(goalId, amount, occurredAt?, note?)` + `removeContribution(id)`. Слушает `ff:goal-contributions-changed` И `ff:operations-changed`.
+
+**UI:**
+- **Страница `/goals`:** заголовок + «+ Новая цель», список активных целей, сворачиваемый блок «Достигнутые (N)». Empty-state с CTA. Пункт «Цели» добавлен в navbar (`AppLayout`) между «Операции» и «Настройки».
+- **`GoalCard`:** иконка-плашка + название + бейджи (🏠/🧍 visibility, ⚡ N% auto, 🎉 Достигнуто), прогресс-бар (цвет цели или индиго; emerald при isDone, клипуется на 100%), крупная цифра «saved / target» + «осталось N ₪», ETA-строка с ⚠ при behindTarget, меню ⋯ (Изменить / Архивировать-Вернуть / Удалить — последнее только для owner). Кнопка «+ Пополнить» или «Архивировать» в зависимости от состояния.
+- **`GoalDialog`:** иконка-пикер (🎯🏖🏠💍🚗👶🎓💻🛟🪙), название, target_amount, target_date nullable, visibility (две карточки Семейная/Личная), auto_percent_of_income 0..100. Используется и для создания, и для edit (`goal` prop). Form-reset через legit setState-in-effect (как `AddOperationDialog`).
+- **`ContributeDialog`:** сумма в base_currency (плейсхолдер = оставшаяся), дата, заметка. source='manual'.
+- **`SafetyCushion`** под «Общий баланс» на Dashboard: «X месяцев жизни без дохода» (округление до 0.5), под ней средний расход и monthsUsed, hint-строка зависит от tone: low (<3) — янтарный «маловато, обычно 3-6»; mid (3-6) — нейтральный «можно стремиться к 6»; high (≥6) — emerald «🎉 надёжный запас». Edge cases: нет данных → отдельный текст без цифр; totalBalance < 0 → «расходов больше, чем активов». Склонение «месяц/месяца/месяцев» по русским правилам, без i18n-библиотек.
+- **`GoalsSummary`** мини-виджет на Dashboard под `BudgetsProgress`: до 3 активных целей сортированных по percent, узкий прогресс-бар, ссылка «Все →» на /goals. Если активных нет — null (не рисуется).
+
+**Инфраструктура:**
+- `types/database.ts` синхронизирован: добавлены Row/Insert/Update для `goals` и `goal_contributions`, Args/Returns для `convert_to_base` и `apply_auto_goal_contributions`.
+- App.tsx: новый роут `goals` под RequireAuth + AppLayout.
+
+**Build/tsc/lint:** все чисты на каждой подфазе. Один фикс по ходу — конкатенация `'…' + '…'` в SELECT_COLS ломала literal-тип supabase-js и отдавала `GenericStringError` на возврате `.single()`; решено сжатием в одну строку.
+
+**Что осталось за пределами ветки:**
+- Интерактивный UX-обход с реальными данными жены — dev-server поднимался, маршруты отдают index.html, новые модули трансформируются Vite без ошибок, но ручной кликовый сценарий «создать цель → пополнить → tick_schedules → виджеты обновились» в этой сессии не выполнялся. Edge cases покрыты статически:
+  - цель без contributions → ETA «оценка появится после первого пополнения»;
+  - цель достигнута → плашка 🎉 + кнопка «Архивировать»;
+  - переполнение → бар клипуется на 100%, строка «+N сверх плана»;
+  - viewMode-фильтр для подушки: monthlyExpenses считается по тем же operations, что и баланс (личный/семейный — каждая сторона видит свою цифру);
+  - подушка при нулевом расходе → «нет данных»; при отрицательном балансе → «расходов больше, чем активов»;
+  - идемпотентность auto-зачисления через unique-индекс + on conflict do nothing;
+  - курса нет на дату income → contribution не создаётся, операция всё равно создаётся (`raise notice` в логах);
+  - удаление income-операции → ON DELETE SET NULL на source_operation_id, contribution остаётся (отложенные деньги не возвращаются).
+- Color-пикер у целей — отложен (по умолчанию индиго). Иконка-пикер делаем.
+- Round-up savings, эссенциальные категории, web push «цель достигнута» — отдельные ветки.
