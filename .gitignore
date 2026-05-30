@@ -29,9 +29,11 @@ dist-ssr
 .env.local
 .env.*.local
 
-# PWA generated assets
+# PWA generated assets (создаются `npm run pwa:icons` / prebuild)
 dev-dist
 public/pwa-*.png
+public/apple-touch-icon.png
+public/icon-source.svg
 
 # Supabase
 .supabase

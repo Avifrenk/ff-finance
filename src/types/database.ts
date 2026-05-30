@@ -600,6 +600,69 @@ export type Database = {
         }
         Relationships: []
       }
+      push_subscriptions: {
+        Row: {
+          id: string
+          profile_id: string
+          endpoint: string
+          p256dh: string
+          auth: string
+          user_agent: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          profile_id: string
+          endpoint: string
+          p256dh: string
+          auth: string
+          user_agent?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          profile_id?: string
+          endpoint?: string
+          p256dh?: string
+          auth?: string
+          user_agent?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      notification_queue: {
+        Row: {
+          id: string
+          profile_id: string
+          title: string
+          body: string
+          url: string | null
+          dedup_key: string | null
+          created_at: string
+          sent_at: string | null
+        }
+        Insert: {
+          id?: string
+          profile_id: string
+          title: string
+          body: string
+          url?: string | null
+          dedup_key?: string | null
+          created_at?: string
+          sent_at?: string | null
+        }
+        Update: {
+          id?: string
+          profile_id?: string
+          title?: string
+          body?: string
+          url?: string | null
+          dedup_key?: string | null
+          created_at?: string
+          sent_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: {

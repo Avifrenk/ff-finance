@@ -18,6 +18,7 @@ import { SafetyCushion } from '../components/SafetyCushion'
 import { CryptoPortfolioWidget } from '../components/CryptoPortfolioWidget'
 import { DebtsSummary } from '../components/DebtsSummary'
 import { GoalsSummary } from '../components/GoalsSummary'
+import { InstallBanner } from '../components/InstallBanner'
 import { useGoals } from '../hooks/useGoals'
 import { useGoalContributions } from '../hooks/useGoalContributions'
 import { formatMoney } from '../lib/format'
@@ -238,6 +239,8 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6">
+      <InstallBanner />
+
       <header>
         <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
           {viewMode === 'personal' ? '🧍 Личный кабинет' : '🏠 Семейный кабинет'}

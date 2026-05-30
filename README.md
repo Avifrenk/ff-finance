@@ -28,9 +28,26 @@ npm run dev
 ## Скрипты
 
 - `npm run dev` — dev-сервер (Vite, HMR)
-- `npm run build` — production-сборка
+- `npm run build` — production-сборка (`prebuild` сначала генерит PWA-иконки)
 - `npm run preview` — preview прод-сборки локально
 - `npm run lint` — ESLint
+- `npm run pwa:icons` — пересобрать PNG-иконки из шаблона `scripts/gen-pwa-icons.mjs`
+- `npm run db:push` — накатить миграции из `supabase/migrations/` на prod-БД
+- `npm run db:backup` — снять gzip-дамп БД в `~/Backups/ff-finance/YYYY-MM-DD-HHMM.sql.gz`
+
+## Бэкап и восстановление БД
+
+**Автоматический (Supabase free tier).** Supabase каждый день делает полный snapshot. Retention — 7 дней. Посмотреть и восстановить: Supabase Dashboard → Database → Backups → выбрать snapshot → Restore. Point-in-time recovery на free-тарифе недоступен, только rollback на день целиком.
+
+**Ручной (recommended раз в месяц).** Запускаем:
+
+```bash
+npm run db:backup
+```
+
+Скрипт читает connection-URL так же, как `db:push` (из `~/.config/ff-finance/connection`), вызывает `pg_dump --schema=public --schema=auth --no-owner --no-acl`, gzip'ит вывод и кладёт в `~/Backups/ff-finance/YYYY-MM-DD-HHMM.sql.gz`. Требует установленный локально `pg_dump` (входит в `postgresql` brew-формулу).
+
+Восстановление из ручного дампа в случае катастрофы — `gunzip -c file.sql.gz | psql <new-connection-url>`.
 
 ## Документация
 
