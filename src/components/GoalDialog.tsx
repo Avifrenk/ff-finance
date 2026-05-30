@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useGoals, type Goal } from '../hooks/useGoals'
+import { useApp } from '../contexts/useApp'
+import { currencySymbol } from '../lib/format'
 import { AuthInput, ErrorBox, PrimaryButton, SecondaryButton } from './AuthControls'
 
 interface Props {
@@ -14,12 +16,16 @@ const ICON_OPTIONS = ['🎯', '🏖', '🏠', '💍', '🚗', '👶', '🎓', '�
 export function GoalDialog({ open, onClose, goal }: Props) {
   const isEdit = !!goal
   const { create, update } = useGoals({ includeArchived: true })
+  const { household } = useApp()
+  const baseCurrency = household?.base_currency ?? 'ILS'
 
   const [name, setName] = useState('')
   const [target, setTarget] = useState('')
   const [targetDate, setTargetDate] = useState('')
   const [visibility, setVisibility] = useState<'personal' | 'shared'>('shared')
-  const [autoPercent, setAutoPercent] = useState('0')
+  const [autoMode, setAutoMode] = useState<'off' | 'percent' | 'amount'>('off')
+  const [autoPercent, setAutoPercent] = useState('')
+  const [autoAmount, setAutoAmount] = useState('')
   const [icon, setIcon] = useState<string>('🎯')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -35,14 +41,28 @@ export function GoalDialog({ open, onClose, goal }: Props) {
       setTarget(String(goal.target_amount))
       setTargetDate(goal.target_date ?? '')
       setVisibility(goal.visibility)
-      setAutoPercent(String(goal.auto_percent_of_income))
+      if (goal.auto_percent_of_income > 0) {
+        setAutoMode('percent')
+        setAutoPercent(String(goal.auto_percent_of_income))
+        setAutoAmount('')
+      } else if (goal.auto_amount_per_income > 0) {
+        setAutoMode('amount')
+        setAutoPercent('')
+        setAutoAmount(String(goal.auto_amount_per_income))
+      } else {
+        setAutoMode('off')
+        setAutoPercent('')
+        setAutoAmount('')
+      }
       setIcon(goal.icon ?? '🎯')
     } else {
       setName('')
       setTarget('')
       setTargetDate('')
       setVisibility('shared')
-      setAutoPercent('0')
+      setAutoMode('off')
+      setAutoPercent('')
+      setAutoAmount('')
       setIcon('🎯')
     }
     setError(null)
@@ -63,32 +83,37 @@ export function GoalDialog({ open, onClose, goal }: Props) {
       setError('Дайте цели название')
       return
     }
-    const autoNum = Number(autoPercent.replace(',', '.'))
-    if (!isFinite(autoNum) || autoNum < 0 || autoNum > 100) {
-      setError('Авто-процент должен быть от 0 до 100')
-      return
+    let autoPercentNum = 0
+    let autoAmountNum = 0
+    if (autoMode === 'percent') {
+      autoPercentNum = Number(autoPercent.replace(',', '.'))
+      if (!isFinite(autoPercentNum) || autoPercentNum <= 0 || autoPercentNum > 100) {
+        setError('Процент должен быть от 0 до 100')
+        return
+      }
+    } else if (autoMode === 'amount') {
+      autoAmountNum = Number(autoAmount.replace(',', '.'))
+      if (!isFinite(autoAmountNum) || autoAmountNum <= 0) {
+        setError('Сумма должна быть положительной')
+        return
+      }
     }
 
     setBusy(true)
     try {
+      const payload = {
+        name: name.trim(),
+        target_amount: targetNum,
+        target_date: targetDate || null,
+        visibility,
+        auto_percent_of_income: autoPercentNum,
+        auto_amount_per_income: autoAmountNum,
+        icon,
+      }
       if (isEdit && goal) {
-        await update(goal.id, {
-          name: name.trim(),
-          target_amount: targetNum,
-          target_date: targetDate || null,
-          visibility,
-          auto_percent_of_income: autoNum,
-          icon,
-        })
+        await update(goal.id, payload)
       } else {
-        await create({
-          name: name.trim(),
-          target_amount: targetNum,
-          target_date: targetDate || null,
-          visibility,
-          auto_percent_of_income: autoNum,
-          icon,
-        })
+        await create(payload)
       }
       onClose()
     } catch (e) {
@@ -209,21 +234,60 @@ export function GoalDialog({ open, onClose, goal }: Props) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Авто-зачисление с дохода (%)
+            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">
+              Авто-зачисление с дохода
             </label>
-            <AuthInput
-              type="number"
-              min={0}
-              max={100}
-              step={1}
-              value={autoPercent}
-              onChange={(e) => setAutoPercent(e.target.value)}
-            />
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              0 — выключено. Иначе с каждой будущей зарплаты/дохода автоматически
-              откладывается этот процент.
-            </p>
+            <div className="grid grid-cols-3 gap-1 p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 mb-2">
+              <AutoModeTab active={autoMode === 'off'} onClick={() => setAutoMode('off')}>
+                Выключено
+              </AutoModeTab>
+              <AutoModeTab active={autoMode === 'percent'} onClick={() => setAutoMode('percent')}>
+                % дохода
+              </AutoModeTab>
+              <AutoModeTab active={autoMode === 'amount'} onClick={() => setAutoMode('amount')}>
+                Фикс. сумма
+              </AutoModeTab>
+            </div>
+
+            {autoMode === 'percent' && (
+              <>
+                <AuthInput
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  inputMode="decimal"
+                  placeholder="10"
+                  value={autoPercent}
+                  onChange={(e) => setAutoPercent(e.target.value)}
+                />
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  С каждой будущей зарплаты/дохода автоматически откладывается этот процент.
+                </p>
+              </>
+            )}
+
+            {autoMode === 'amount' && (
+              <>
+                <AuthInput
+                  type="text"
+                  inputMode="decimal"
+                  placeholder={`например, 500 ${currencySymbol(baseCurrency)}`}
+                  value={autoAmount}
+                  onChange={(e) => setAutoAmount(e.target.value)}
+                />
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Фиксированная сумма в {currencySymbol(baseCurrency)} {baseCurrency}, откладывается
+                  с каждой income-операции (зарплата, перевод, бонус).
+                </p>
+              </>
+            )}
+
+            {autoMode === 'off' && (
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Авто-зачисление выключено — пополнять цель будете руками через «+ Пополнить».
+              </p>
+            )}
           </div>
 
           {error && <ErrorBox>{error}</ErrorBox>}
@@ -239,6 +303,30 @@ export function GoalDialog({ open, onClose, goal }: Props) {
         </form>
       </div>
     </div>
+  )
+}
+
+function AutoModeTab({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`py-2 text-xs font-medium rounded-md transition-colors ${
+        active
+          ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
+          : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+      }`}
+    >
+      {children}
+    </button>
   )
 }
 

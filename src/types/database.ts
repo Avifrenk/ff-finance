@@ -394,6 +394,7 @@ export type Database = {
           target_date: string | null
           visibility: 'personal' | 'shared'
           auto_percent_of_income: number
+          auto_amount_per_income: number
           icon: string | null
           color: string | null
           is_archived: boolean
@@ -409,6 +410,7 @@ export type Database = {
           target_date?: string | null
           visibility?: 'personal' | 'shared'
           auto_percent_of_income?: number
+          auto_amount_per_income?: number
           icon?: string | null
           color?: string | null
           is_archived?: boolean
@@ -424,6 +426,7 @@ export type Database = {
           target_date?: string | null
           visibility?: 'personal' | 'shared'
           auto_percent_of_income?: number
+          auto_amount_per_income?: number
           icon?: string | null
           color?: string | null
           is_archived?: boolean
