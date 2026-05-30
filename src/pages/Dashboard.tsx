@@ -15,6 +15,7 @@ import { CategoryBreakdown } from '../components/CategoryBreakdown'
 import { BudgetsProgress } from '../components/BudgetsProgress'
 import { PaymentsCalendar } from '../components/PaymentsCalendar'
 import { SafetyCushion } from '../components/SafetyCushion'
+import { CryptoPortfolioWidget } from '../components/CryptoPortfolioWidget'
 import { GoalsSummary } from '../components/GoalsSummary'
 import { useGoals } from '../hooks/useGoals'
 import { useGoalContributions } from '../hooks/useGoalContributions'
@@ -251,6 +252,8 @@ export function Dashboard() {
         totalBalance={totalBalance}
         baseCurrency={baseCurrency}
       />
+
+      <CryptoPortfolioWidget baseCurrency={baseCurrency} />
 
       <div className="flex items-center gap-3">
         <PeriodPicker value={period} onChange={setPeriod} />
