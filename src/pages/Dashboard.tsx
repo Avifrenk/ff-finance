@@ -15,6 +15,9 @@ import { CategoryBreakdown } from '../components/CategoryBreakdown'
 import { BudgetsProgress } from '../components/BudgetsProgress'
 import { PaymentsCalendar } from '../components/PaymentsCalendar'
 import { SafetyCushion } from '../components/SafetyCushion'
+import { GoalsSummary } from '../components/GoalsSummary'
+import { useGoals } from '../hooks/useGoals'
+import { useGoalContributions } from '../hooks/useGoalContributions'
 import { formatMoney } from '../lib/format'
 import { convertMoney } from '../lib/fx'
 import {
@@ -36,6 +39,8 @@ export function Dashboard() {
   const { operations: allOperations, loading } = useOperations('all')
   const { schedules } = useSchedules()
   const { ratesByDate } = useFxRates()
+  const { goals } = useGoals()
+  const { contributions } = useGoalContributions()
   const baseCurrency = household?.base_currency ?? 'ILS'
 
   const [period, setPeriod] = useState<DashboardPeriod>('month')
@@ -294,6 +299,12 @@ export function Dashboard() {
         budgetByCategory={budgetByCategory}
         spentItems={spentForBudgets.items}
         categoryById={categoryById}
+        baseCurrency={baseCurrency}
+      />
+
+      <GoalsSummary
+        goals={goals}
+        contributions={contributions}
         baseCurrency={baseCurrency}
       />
 
