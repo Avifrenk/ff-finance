@@ -37,7 +37,7 @@
   - **Edge case:** прошлого месяца нет данных или 0 — не пишем «−100%», пишем «нет данных за прошлый месяц» нейтрально. Это инвариант («не врать, когда нет данных»).
   - Дельта считается на конвертированных в base_currency суммах через `convertMoney` на `op.occurred_at`.
 
-- [x] **Фаза 3.4. Таблица `budgets` + RLS + GRANT.** _(SQL написан в `supabase/migrations/20260530100000_budgets.sql`; deploy к prod не выполнен — пароль БД в .env.local отсутствует, старый ротированный не подошёл. Применить отдельной командой, см. блок «Деплой миграций» ниже.)_
+- [x] **Фаза 3.4. Таблица `budgets` + RLS + GRANT.** _(SQL `supabase/migrations/20260530100000_budgets.sql` применён к prod 2026-05-30 через `npm run db:push`. Проверка: таблица создана, RLS-политик 4 — SELECT/INSERT/UPDATE/DELETE на authenticated; GRANT-ы DML только на postgres/authenticated, anon/service_role без записи.)_
   - Миграция `XXXX_budgets.sql`:
     - `budgets` (`id uuid pk default gen_random_uuid()`, `household_id uuid not null references households on delete cascade`, `category_id uuid not null references categories on delete cascade`, `month date not null` — первый день месяца, `amount numeric(14,2) not null check (amount > 0)`, `created_by uuid not null references profiles`, `created_at timestamptz default now()`).
     - `unique (household_id, category_id, month)`.
@@ -160,15 +160,11 @@ npx supabase db push --db-url \
 - **Build/tsc/lint:** все чисты (исправлены `react-hooks/immutability` в donut, `react-refresh/only-export-components` — вынесением `rangeFor` в `lib/period.ts`, `react-hooks/set-state-in-effect` — eslint-disable с обоснованием по образцу `useFxRates`).
 - **`types/database.ts`**: добавлена таблица `budgets` (Row/Insert/Update), чтобы supabase-js типизировался.
 
-**Что осталось за пределами ветки (требует разовых действий не от агента):**
-- Миграция `20260530100000_budgets.sql` **не задеплоена на prod**. Пароль БД в `.env.local` не лежит (`SUPABASE_DB_PASSWORD` отсутствует — там только `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY`), старый ротированный (`GTwWTojNli9XJlBN` из multivalyuta-плана) не принимается. Применить отдельной командой, когда у пользователя будет под рукой действующий пароль:
-  ```
-  npx supabase db push --db-url \
-    'postgresql://postgres:<password>@db.cngrrvfqwaqfydmfhiex.supabase.co:5432/postgres' \
-    --yes
-  ```
-  До применения виджет бюджетов в Dashboard молча пустой (через defensive в `useBudgets`); секция «Бюджеты на месяц» в Settings покажет тот же пустой список. CRUD-операции тихо не сработают (ошибка `42P01` не пробрасывается в UI).
-- UX-проверка в браузере с реальными данными не прогонялась — dev-сервер поднимался, но интерактивный обход страниц супругой/пользователем не выполнялся в рамках этой сессии. Edge cases покрыты статически в коде:
+**Инфраструктура для следующих миграций:**
+- `scripts/db-push.mjs` + `npm run db:push` — миграции к prod применяются одной командой, без участия пользователя. Скрипт читает connection-URL из `FF_DB_URL` или `~/.config/ff-finance/connection`. Файл `~/.config/ff-finance/connection` создан в этой сессии после того, как пользователь скинул действующий пароль (старый ротированный `GTwWTojNli9XJlBN` уже не принимается; `SUPABASE_DB_PASSWORD` в `.env.local` отсутствует — там только клиентские ключи). Все будущие миграции в этом проекте — `npm run db:push`, без cat-а .env, без вопросов.
+
+**Что осталось за пределами ветки:**
+- UX-проверка в браузере с реальными данными жены не прогонялась — dev-сервер поднимался, но интерактивный обход страниц не выполнялся в рамках этой сессии. Edge cases покрыты статически в коде:
   - дельта при `previousHasData=false` → «нет данных» (`MonthCompareCards`);
   - пустые pie/bar → текстовая подпись `emptyHint` (`CategoryBreakdown`);
   - категории без бюджета не появляются в `BudgetsProgress` (`null` возвращается, если `budgetByCategory.size === 0`);
