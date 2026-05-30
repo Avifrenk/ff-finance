@@ -39,8 +39,7 @@ export interface UpdateGoalInput {
 }
 
 const SELECT_COLS =
-  'id, household_id, owner_profile_id, name, target_amount, target_date, visibility, ' +
-  'auto_percent_of_income, icon, color, is_archived, created_at, updated_at'
+  'id, household_id, owner_profile_id, name, target_amount, target_date, visibility, auto_percent_of_income, icon, color, is_archived, created_at, updated_at'
 
 export function useGoals({ includeArchived = false }: { includeArchived?: boolean } = {}) {
   const { household, profile } = useApp()

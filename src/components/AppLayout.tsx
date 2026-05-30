@@ -36,6 +36,7 @@ export function AppLayout() {
           <nav className="ml-auto flex items-center gap-1 text-sm">
             <NavItem to="/">Дашборд</NavItem>
             <NavItem to="/operations">Операции</NavItem>
+            <NavItem to="/goals">Цели</NavItem>
             <NavItem to="/settings">Настройки</NavItem>
             <button
               onClick={() => signOut()}
