@@ -83,7 +83,7 @@ UX-фильтр Фазы 3 («поймёт ли жена с первого ра�
     - `removeContribution(id)` — для отката ошибочного пополнения.
     - Событие `ff:goal-contributions-changed`.
 
-- [ ] **Фаза 4.3. Чистые агрегаты `src/lib/goals.ts`.**
+- [x] **Фаза 4.3. Чистые агрегаты `src/lib/goals.ts`.**
   - `goalProgress(goal, contributions): { saved, remaining, percent, contributionsCount, firstContributionAt, lastContributionAt }` — сумма и метаданные. `percent = min(saved/target, 1)`, фактический percent (для текста «переполнено на 12%») в отдельном поле `actualPercent`.
   - `goalEta(goal, contributions, today = new Date()): { etaDate: Date | null, perDay: number, reason: 'no-contributions' | 'too-slow' | 'done' | 'on-track' }`:
     - Если `saved >= target` → `reason='done', etaDate=null`.
