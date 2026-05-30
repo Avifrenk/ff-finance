@@ -5,6 +5,8 @@ interface Props {
   monthlyExpenses: MonthlyExpense[]
   totalBalance: number
   baseCurrency: string
+  /** Если true — расход посчитан по обязательным категориям (точнее); иначе по всем тратам. */
+  essentialMode?: boolean
 }
 
 /**
@@ -18,7 +20,7 @@ interface Props {
  *   * ≥ 6 мес → зелёная плашка «надёжный запас».
  *   * < 0 мес (овердрафт) → нейтрально-предупредительный текст.
  */
-export function SafetyCushion({ monthlyExpenses, totalBalance, baseCurrency }: Props) {
+export function SafetyCushion({ monthlyExpenses, totalBalance, baseCurrency, essentialMode = false }: Props) {
   const cushion = safetyCushion(monthlyExpenses, totalBalance)
 
   if (cushion.months === null) {
@@ -88,10 +90,16 @@ export function SafetyCushion({ monthlyExpenses, totalBalance, baseCurrency }: P
         </span>
       </div>
       <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-        Средний расход — {formatMoney(cushion.avgExpense, baseCurrency, 0)}/мес за{' '}
+        {essentialMode ? 'Обязательные расходы' : 'Средний расход'} —{' '}
+        {formatMoney(cushion.avgExpense, baseCurrency, 0)}/мес за{' '}
         {cushion.monthsUsed} {monthsWord(cushion.monthsUsed)}.
       </p>
       <p className={`text-xs mt-2 ${captionColors[tone]}`}>{hintText[tone]}</p>
+      {essentialMode && (
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+          Считаем по категориям, отмеченным как обязательные в Настройках.
+        </p>
+      )}
     </section>
   )
 }

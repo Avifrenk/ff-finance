@@ -31,6 +31,8 @@ export function Settings() {
 
       <AccountsSection />
 
+      <EssentialCategoriesSection />
+
       <BudgetsSection />
 
       <SchedulesSection />
@@ -102,6 +104,74 @@ function BaseCurrencySection() {
       {saving && <p className="text-xs text-slate-500 mt-2">Сохраняем…</p>}
       {info && <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2">{info}</p>}
       {error && <div className="mt-2"><ErrorBox>{error}</ErrorBox></div>}
+    </section>
+  )
+}
+
+function EssentialCategoriesSection() {
+  const { categories, loading, setEssential } = useCategories()
+  const [savingId, setSavingId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const expenseCats = useMemo(
+    () => categories.filter((c) => c.kind === 'expense').sort((a, b) => a.name.localeCompare(b.name)),
+    [categories],
+  )
+
+  async function toggle(id: string, value: boolean) {
+    setError(null)
+    setSavingId(id)
+    try {
+      await setEssential(id, value)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось сохранить')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  return (
+    <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-5">
+      <h2 className="font-semibold text-slate-900 dark:text-slate-100 mb-1">
+        Обязательные категории
+      </h2>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+        Подушка безопасности по умолчанию считает по всем тратам — это
+        завышенная цифра. Отметьте «обязательные» категории (аренда, ваад,
+        еда), и подушка станет точнее: «жизнь без дохода» = только эти траты.
+        Если ни одна не отмечена — считаем по всем (как сейчас).
+      </p>
+
+      {loading && <p className="text-sm text-slate-500">Загрузка…</p>}
+      {error && <ErrorBox>{error}</ErrorBox>}
+
+      {!loading && expenseCats.length === 0 && (
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Сначала создайте категории расходов.
+        </p>
+      )}
+
+      {expenseCats.length > 0 && (
+        <ul className="divide-y divide-slate-200 dark:divide-slate-700 -my-2">
+          {expenseCats.map((c) => (
+            <li key={c.id} className="py-2 flex items-center gap-3">
+              <span className="text-base shrink-0 w-6 text-center">{c.icon ?? '•'}</span>
+              <span className="flex-1 min-w-0 truncate text-sm text-slate-900 dark:text-slate-100">
+                {c.name}
+              </span>
+              <label className="inline-flex items-center gap-2 cursor-pointer text-xs text-slate-600 dark:text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={c.is_essential}
+                  onChange={(e) => toggle(c.id, e.target.checked)}
+                  disabled={savingId === c.id}
+                  className="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-indigo-500 focus:ring-indigo-500/40"
+                />
+                Обязательная
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   )
 }

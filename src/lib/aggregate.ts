@@ -107,6 +107,10 @@ function convertOne(
  * Сумма дохода/расхода за период, в base_currency.
  * Пример: monthTotals(ops, accs, 'ILS', rates, {from: '2026-05-01', to: '2026-05-31'})
  * → { income: 18000, expense: 6240, net: 11760, missingRate: false }.
+ *
+ * Опциональный categoryFilter — учитывать только операции с category_id
+ * из этого Set'а (используется для расчёта подушки по essential-категориям).
+ * null-category в фильтр не попадает.
  */
 export function monthTotals(
   operations: AggOperation[],
@@ -114,6 +118,7 @@ export function monthTotals(
   baseCurrency: string,
   ratesByDate: RatesByDate,
   range: DateRange,
+  categoryFilter?: Set<string>,
 ): MonthTotals {
   let income = 0
   let expense = 0
@@ -121,6 +126,10 @@ export function monthTotals(
   for (const op of operations) {
     if (op.transfer_id !== null) continue
     if (!inRange(op.occurred_at, range)) continue
+    if (categoryFilter) {
+      if (op.category_id === null) continue
+      if (!categoryFilter.has(op.category_id)) continue
+    }
     const acc = accountById.get(op.account_id)
     const currency = acc?.currency ?? baseCurrency
     const conv = convertOne(Number(op.amount), currency, baseCurrency, ratesByDate, op.occurred_at)
