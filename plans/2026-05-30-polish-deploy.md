@@ -233,9 +233,17 @@ UX-фильтр прежний: всё, что видит жена, понятн
 - Smoke-curl на `/functions/v1/send-push` → `{"ok":true,"processed":0,"sent":0,"ms":~300}`.
 - Миграция `20260530600200_send_push_cron.sql` накатана — pg_cron каждые 5 мин зовёт send-push.
 
-**Отложено (нужно ручное действие в Vercel UI):**
-- Фаза 8.5: деплой фронта на Vercel. У аккаунта `avifrenk` нет personal scope (никогда не открывал dashboard), а через API team создать не удалось — Vercel требует payment method. После того как пользователь один раз пройдёт Hobby-онбординг на https://vercel.com/dashboard, CLI деплоит сам без дополнительных вопросов: `vercel link --yes` → `vercel env add` x3 (значения из `.env.local`) → `vercel deploy --prod`. Затем добавить prod-URL в Supabase Auth → Redirect URLs (через REST API под тем же PAT, без UI).
-- «Тестирование с супругой и итерация» — следствие отложенного 8.5.
+**Также закрыто (8.5, через GitHub Pages вместо Vercel):**
+- Попытка деплоя на Vercel провалилась: у аккаунта `avifrenk` нет personal scope, а единственный путь его получить через UI (создание team) требует payment method. Час уйдён на тщетные попытки обойти через REST API и UI.
+- Переключение: GitHub Pages (у пользователя `gh` CLI залогинен в `Avifrenk`). Создан публичный репозиторий `Avifrenk/ff-finance`, ветка `gh-pages` для статики, Pages включён через Management API (`legacy` build_type, source = `gh-pages` / `/`).
+- Прод-URL: **https://avifrenk.github.io/ff-finance/**. Manifest, sw.js, иконки отдаются с 200. SPA-routing через `404.html = index.html` (стандартный GitHub Pages trick).
+- Конфиг: `vite.config.ts` читает `VITE_BASE_PATH` (по умолчанию `/`, в проде `/ff-finance/`). Manifest scope/start_url следуют base. SW в push handler берёт scope из `registration.scope` для корректных путей иконок и URL deep-link.
+- `npm run deploy` (новый, `scripts/deploy-pages.mjs`) — build с прод-base, копия `index.html → 404.html`, orphan-репо в `/tmp`, force-push на `gh-pages`. После любого изменения в main — одна команда обновляет прод.
+- Supabase Auth → URI Allow List: добавлены `https://avifrenk.github.io/ff-finance/`, `/auth/callback`, `/invite/**` через Management API (`PATCH /v1/projects/cngrrvfqwaqfydmfhiex/config/auth`). Localhost остался для dev.
+
+**Известные ограничения:**
+- Workflow `.github/workflows/deploy.yml` (auto-deploy на push в main) подготовлен, но не закоммичен — OAuth scope `gh` токена не включает `workflow`. Лежит в `/tmp/deploy.yml`, можно добавить позже через `gh auth refresh -s workflow` (раз в браузер). Сейчас обновление через `npm run deploy`.
+- iOS Web Push на проде работает только в установленной PWA на iOS 16.4+. Без установки на главный экран пуши не доходят, даже после grant permission.
 
 **Follow-up'ы из плана:**
 - Гендерная эвристика в `DebtsSummary` (имя на а/я → ж.р.) — не трогали; на нерусских именах ошибается. Лечится `profile.gender` или нейтральной формулировкой.

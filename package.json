@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "db:push": "node scripts/db-push.mjs",
     "db:backup": "node scripts/db-dump.mjs",
-    "pwa:icons": "node scripts/gen-pwa-icons.mjs"
+    "pwa:icons": "node scripts/gen-pwa-icons.mjs",
+    "deploy": "node scripts/deploy-pages.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",

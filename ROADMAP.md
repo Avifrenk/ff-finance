@@ -87,17 +87,21 @@ src/
 - [x] История переводов между супругами
 - [x] Кнопка «погасить долг»
 
-### Фаза 8 — Полировка и деплой 🟡 (почти всё)
+### Фаза 8 — Полировка и деплой ✅
 - [x] Адаптация под мобильный (PWA install prompt) — фазы 8.1–8.3
 - [x] Push-уведомления (Web Push) — фронт/SW/триггеры/Edge Function +
       деплой: `send-push` и `fetch-coingecko-prices` задеплоены,
-      VAPID-секреты выставлены, `20260530600200_send_push_cron.sql`
+      VAPID-переменные выставлены, `20260530600200_send_push_cron.sql`
       накатан — pg_cron каждые 5 мин дёргает send-push.
-- [ ] Деплой на Vercel/Cloudflare Pages — `vercel.json` готов; ждёт
-      ручного прохождения Hobby-онбординга на vercel.com (нужен один
-      раз, после этого CLI деплоит автономно).
+- [x] Деплой фронта — **GitHub Pages** (после неудачи с Vercel — там
+      аккаунт пользователя застрял в broken state без personal scope).
+      Прод: **https://avifrenk.github.io/ff-finance/**. Обновление
+      через `npm run deploy` (build с base `/ff-finance/` → push на
+      ветку `gh-pages`). Supabase Auth → URI Allow List уже содержит
+      прод-URL и `/auth/callback`.
 - [x] Бэкап БД (Supabase встроенный) — `npm run db:backup` + раздел в README
-- [ ] Тестирование с супругой и итерация — после Vercel-деплоя
+- [ ] Тестирование с супругой и итерация — отдать ей URL, собирать
+      обратную связь.
 
 ## 📋 Полный список фич (для справки)
 
