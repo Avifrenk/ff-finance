@@ -351,6 +351,39 @@ export type Database = {
         }
         Relationships: []
       }
+      budgets: {
+        Row: {
+          id: string
+          household_id: string
+          category_id: string
+          month: string
+          amount: number
+          created_by: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          household_id: string
+          category_id: string
+          month: string
+          amount: number
+          created_by: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          household_id?: string
+          category_id?: string
+          month?: string
+          amount?: number
+          created_by?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: {
