@@ -8,6 +8,7 @@ import { useCurrencies, type Currency } from '../hooks/useCurrencies'
 import { monthKey, useBudgets } from '../hooks/useBudgets'
 import { AuthInput, ErrorBox, PrimaryButton, SecondaryButton } from '../components/AuthControls'
 import { InstallSection } from '../components/InstallBanner'
+import { NotificationsSection } from '../components/NotificationsSection'
 import { currencySymbol, formatDate, formatMoney } from '../lib/format'
 
 export function Settings() {
@@ -39,6 +40,8 @@ export function Settings() {
       <SchedulesSection />
 
       <InstallSection />
+
+      <NotificationsSection />
 
       <button
         onClick={() => signOut()}
