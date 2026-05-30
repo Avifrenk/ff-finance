@@ -637,6 +637,7 @@ export type Database = {
           title: string
           body: string
           url: string | null
+          dedup_key: string | null
           created_at: string
           sent_at: string | null
         }
@@ -646,6 +647,7 @@ export type Database = {
           title: string
           body: string
           url?: string | null
+          dedup_key?: string | null
           created_at?: string
           sent_at?: string | null
         }
@@ -655,6 +657,7 @@ export type Database = {
           title?: string
           body?: string
           url?: string | null
+          dedup_key?: string | null
           created_at?: string
           sent_at?: string | null
         }
