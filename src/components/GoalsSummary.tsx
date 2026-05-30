@@ -33,6 +33,11 @@ export function GoalsSummary({ goals, contributions, baseCurrency }: Props) {
 
   if (rows.length === 0) return null
 
+  function remainingPct(remaining: number, target: number): number {
+    if (target <= 0) return 0
+    return Math.round((remaining / target) * 100)
+  }
+
   return (
     <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-5">
       <div className="flex items-center justify-between mb-3">
@@ -59,6 +64,11 @@ export function GoalsSummary({ goals, contributions, baseCurrency }: Props) {
                 <span className="text-xs tabular-nums text-slate-500 dark:text-slate-400 whitespace-nowrap">
                   {formatMoney(progress.saved, baseCurrency, 0)} /{' '}
                   {formatMoney(Number(goal.target_amount), baseCurrency, 0)}
+                  {!isDone && (
+                    <span className="ml-1.5 text-slate-400 dark:text-slate-500">
+                      · осталось {remainingPct(progress.remaining, Number(goal.target_amount))}%
+                    </span>
+                  )}
                 </span>
               </div>
               <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
