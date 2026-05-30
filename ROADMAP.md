@@ -68,13 +68,13 @@ src/
 - [x] Автоматическое зачисление части дохода в цели
 - [x] Подушка безопасности: «у вас X месяцев жизни без дохода»
 
-### Фаза 5 — Крипта
-- [ ] Таблицы: `crypto_holdings`, `crypto_transactions`, `crypto_prices`
-- [ ] CoinGecko API — пуллинг цен раз в час (Supabase Edge Function + cron)
-- [ ] Журнал операций (buy/sell/transfer in/out)
-- [ ] Дашборд портфеля: текущая стоимость, P&L (реализованный + нереализованный), allocation
-- [ ] FIFO-расчёт для налогового отчёта (Capital Gains, Израиль 25%)
-- [ ] Экспорт CSV для подачи в налоговую
+### Фаза 5 — Крипта ✅
+- [x] Таблицы: `crypto_holdings`, `crypto_transactions`, `crypto_prices`
+- [x] CoinGecko API — пуллинг цен раз в час (Supabase Edge Function + cron)
+- [x] Журнал операций (buy/sell/transfer in/out)
+- [x] Дашборд портфеля: текущая стоимость, P&L (реализованный + нереализованный), allocation
+- [x] FIFO-расчёт для налогового отчёта (Capital Gains, Израиль 25%)
+- [x] Экспорт CSV для подачи в налоговую
 
 ### Фаза 6 — AI-фичи
 - [ ] Claude Vision: фото чека → распарсенные позиции
