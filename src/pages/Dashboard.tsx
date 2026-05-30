@@ -16,6 +16,7 @@ import { BudgetsProgress } from '../components/BudgetsProgress'
 import { PaymentsCalendar } from '../components/PaymentsCalendar'
 import { SafetyCushion } from '../components/SafetyCushion'
 import { CryptoPortfolioWidget } from '../components/CryptoPortfolioWidget'
+import { DebtsSummary } from '../components/DebtsSummary'
 import { GoalsSummary } from '../components/GoalsSummary'
 import { useGoals } from '../hooks/useGoals'
 import { useGoalContributions } from '../hooks/useGoalContributions'
@@ -254,6 +255,8 @@ export function Dashboard() {
       />
 
       <CryptoPortfolioWidget baseCurrency={baseCurrency} />
+
+      <DebtsSummary baseCurrency={baseCurrency} />
 
       <div className="flex items-center gap-3">
         <PeriodPicker value={period} onChange={setPeriod} />

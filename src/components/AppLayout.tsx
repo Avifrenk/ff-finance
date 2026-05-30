@@ -38,6 +38,7 @@ export function AppLayout() {
             <NavItem to="/operations">Операции</NavItem>
             <NavItem to="/goals">Цели</NavItem>
             <NavItem to="/crypto">Крипта</NavItem>
+            <NavItem to="/debts">Долги</NavItem>
             <NavItem to="/settings">Настройки</NavItem>
             <button
               onClick={() => signOut()}
