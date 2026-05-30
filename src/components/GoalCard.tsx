@@ -134,7 +134,7 @@ export function GoalCard({
         <div className="text-sm text-slate-600 dark:text-slate-300 tabular-nums">
           {isDone
             ? '✓ всё'
-            : `осталось ${formatMoney(progress.remaining, baseCurrency, 0)}`}
+            : `осталось ${formatMoney(progress.remaining, baseCurrency, 0)} · ${remainingPct(progress.remaining, Number(goal.target_amount))}%`}
         </div>
       </div>
 
@@ -183,6 +183,11 @@ function etaText(
     return `${base} ⚠ позже плана (${formatDateRu(targetDate)})`
   }
   return base
+}
+
+function remainingPct(remaining: number, target: number): number {
+  if (target <= 0) return 0
+  return Math.round((remaining / target) * 100)
 }
 
 function formatDateRu(iso: string): string {
