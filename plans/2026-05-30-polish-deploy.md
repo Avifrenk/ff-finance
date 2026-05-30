@@ -219,4 +219,25 @@ UX-фильтр прежний: всё, что видит жена, понятн
 
 ## Итог
 
-(Заполнится после Фазы 8.7.)
+**Закрыто на 100%:**
+- Фаза 8.1: PWA-готовность. Иконки 192/512/maskable + apple-touch (генерируются на prebuild через `npm run pwa:icons`), `theme_color: #6366f1`, лицевые meta-теги (theme-color, apple-mobile-web-app-*), `viewport-fit=cover`. Манифест `dist/manifest.webmanifest` валидный, lighthouse PWA-проверка должна проходить.
+- Фаза 8.2: `InstallBanner` первой строкой на Dashboard + `InstallSection` в Settings (всегда видна). Хук `useInstallPrompt` ловит `beforeinstallprompt`/`appinstalled`, детектит standalone + iOS (с учётом iPadOS-маскировки под Macintosh), `localStorage` dismiss.
+- Фаза 8.3: safe-area для `<header>`/`<main>`/кнопки «+», на узких экранах навбар свернулся в эмодзи-ряд с aria-label'ами, ViewModeSwitcher показывает только 🧍/🏠. Реальное живое тестирование на айфоне жены — после деплоя (см. ниже).
+- Фаза 8.4.1–8.4.6: VAPID-ключи, миграции `push_subscriptions` + `notification_queue` + триггеры `notify_budget_exceeded` / `notify_goal_reached` / `notify_settlement` (с dedup_key), хук `usePush`, секция «🔔 Уведомления» в Settings, SW (переход на `injectManifest`) с обработчиками `push`/`notificationclick`, Edge Function `send-push` на Deno + `web-push@3.6.7`.
+- Фаза 8.6: `npm run db:backup` через `pg_dump` → `~/Backups/ff-finance/*.sql.gz`, раздел «Бэкап и восстановление БД» в README.
+
+**Отложено (требует чужих сервисов, к которым у агента нет доступа):**
+- Фаза 8.4.7: деплой Edge Function `send-push` и применение `20260530600200_send_push_cron.sql`. Без этого backend-часть пушей не работает: код в репо есть, секреты VAPID сгенерированы локально, но `npx supabase functions deploy` требует Personal Access Token. Пока pg_cron-миграция в `supabase/migrations/`, но **не накатана** — иначе cron каждые 5 минут долбил бы 404. После получения PAT нужно: (a) задеплоить `send-push` и заодно `fetch-coingecko-prices` (tail Фазы 5), (b) `supabase secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... VAPID_SUBJECT=mailto:avramshulga@gmail.com`, (c) `npm run db:push` — применится 600200_send_push_cron.
+- Фаза 8.5: деплой фронта на Vercel. `vercel.json` готов (SPA-rewrite, кэш-заголовки для `sw.js`/manifest/assets), `prebuild` сам генерит иконки. Нужны: Vercel-аккаунт, env vars в Vercel UI (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_VAPID_PUBLIC_KEY`), добавление prod-URL в Supabase Auth → Redirect URLs.
+- «Тестирование с супругой и итерация» — следствие отложенного 8.5.
+
+**Follow-up'ы из плана:**
+- Гендерная эвристика в `DebtsSummary` (имя на а/я → ж.р.) — не трогали; на нерусских именах ошибается. Лечится `profile.gender` или нейтральной формулировкой.
+- Категории CRUD — не трогали; жена пока живёт на seed.
+- Юнит-тесты (vitest для `lib/crypto.ts`, `lib/debts.ts`, теперь ещё `lib/push.ts`) — отдельная ветка `feat/tests`.
+- Push-триггер «крупная трата от партнёра > X ₪» — отложен, нужна UI настройка порога.
+- Удаление `dark:`-классов из всех компонентов (синхронно с убиранием `prefers-color-scheme: dark` из CSS) — отдельная ветка.
+
+**Что пользоваться можно прямо сейчас (без деплоя):**
+- Локально (`npm run dev`) — всё кроме реальной доставки пушей. Триггеры в БД уже работают: при превышении бюджета строка в `notification_queue` появится — её можно увидеть через select для своего профиля.
+- `npm run db:backup` — сохраняет дамп в `~/Backups/ff-finance/`.
