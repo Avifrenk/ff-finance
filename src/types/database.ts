@@ -471,6 +471,129 @@ export type Database = {
         }
         Relationships: []
       }
+      cryptocurrencies: {
+        Row: {
+          id: string
+          symbol: string
+          coingecko_id: string
+          name: string
+          decimals: number
+          icon: string | null
+          is_active: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          symbol: string
+          coingecko_id: string
+          name: string
+          decimals?: number
+          icon?: string | null
+          is_active?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          symbol?: string
+          coingecko_id?: string
+          name?: string
+          decimals?: number
+          icon?: string | null
+          is_active?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
+      crypto_holdings: {
+        Row: {
+          id: string
+          profile_id: string
+          coin_id: string
+          custodian: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          profile_id: string
+          coin_id: string
+          custodian: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          profile_id?: string
+          coin_id?: string
+          custodian?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      crypto_transactions: {
+        Row: {
+          id: string
+          holding_id: string
+          kind: 'buy' | 'sell' | 'transfer_in' | 'transfer_out' | 'fee' | 'airdrop'
+          amount: number
+          price_per_unit_base: number | null
+          fee_base: number
+          occurred_at: string
+          note: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          holding_id: string
+          kind: 'buy' | 'sell' | 'transfer_in' | 'transfer_out' | 'fee' | 'airdrop'
+          amount: number
+          price_per_unit_base?: number | null
+          fee_base?: number
+          occurred_at: string
+          note?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          holding_id?: string
+          kind?: 'buy' | 'sell' | 'transfer_in' | 'transfer_out' | 'fee' | 'airdrop'
+          amount?: number
+          price_per_unit_base?: number | null
+          fee_base?: number
+          occurred_at?: string
+          note?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      crypto_prices: {
+        Row: {
+          id: string
+          coin_id: string
+          quote_code: string
+          price: number
+          as_of: string
+          source: string
+          fetched_at: string
+        }
+        Insert: {
+          id?: string
+          coin_id: string
+          quote_code: string
+          price: number
+          as_of: string
+          source?: string
+          fetched_at?: string
+        }
+        Update: {
+          id?: string
+          coin_id?: string
+          quote_code?: string
+          price?: number
+          as_of?: string
+          source?: string
+          fetched_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: {
