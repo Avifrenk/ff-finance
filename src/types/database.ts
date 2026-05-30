@@ -502,6 +502,19 @@ export type Database = {
         Args: Record<string, never>
         Returns: number
       }
+      convert_to_base: {
+        Args: {
+          p_amount: number
+          p_from_currency: string
+          p_base_currency: string
+          p_on_date: string
+        }
+        Returns: number | null
+      }
+      apply_auto_goal_contributions: {
+        Args: { p_operation_id: string }
+        Returns: number
+      }
     }
     Enums: Record<string, never>
     CompositeTypes: Record<string, never>

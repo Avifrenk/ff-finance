@@ -120,7 +120,7 @@ UX-фильтр Фазы 3 («поймёт ли жена с первого ра�
     - На submit — `contribute(goalId, amount, occurredAt, note)`.
   - Реактивность: после `create`/`contribute`/`update` — Dashboard и Goals подхватывают через CustomEvent.
 
-- [ ] **Фаза 4.5. Автозачисление в `tick_schedules` + ручной триггер.**
+- [x] **Фаза 4.5. Автозачисление в `tick_schedules` + ручной триггер.** _(Миграция `20260530200500_tick_schedules_auto_goals.sql` применена. Добавлены `convert_to_base()` (EUR-cross конверсия на SQL) + `apply_auto_goal_contributions(op_id)` (security definer, идемпотентно через unique-индекс). `tick_schedules` переписана: после insert income-операции вызывает auto-зачисление. Двухуровневая приватность: shared-счёт → только shared цели; personal-счёт → только personal цели владельца. Ручной триггер — существующая RPC `tick_schedules`, ничего нового не добавлено.)_
   - Миграция `supabase/migrations/20260530200500_tick_schedules_auto_goals.sql`:
     - Переписать `tick_schedules()` так, чтобы после `insert into operations` для income-операций вызывался хелпер `apply_auto_goal_contributions(p_operation_id)`.
     - Новая функция `apply_auto_goal_contributions(p_operation_id uuid) returns int` (`security definer`):
