@@ -10,7 +10,10 @@ export interface Category {
   icon: string | null
   color: string | null
   is_default: boolean
+  is_essential: boolean
 }
+
+const SELECT_COLS = 'id, household_id, name, kind, icon, color, is_default, is_essential'
 
 export function useCategories() {
   const { household } = useApp()
@@ -28,12 +31,21 @@ export function useCategories() {
     setError(null)
     const { data, error: err } = await supabase
       .from('categories')
-      .select('id, household_id, name, kind, icon, color, is_default')
+      .select(SELECT_COLS)
       .eq('household_id', household.id)
       .order('kind', { ascending: true })
       .order('name', { ascending: true })
     setLoading(false)
     if (err) {
+      // 42703 — колонка is_essential ещё не накатана: defensive fallback на старый SELECT.
+      if ((err as { code?: string }).code === '42703') {
+        const { data: legacy } = await supabase
+          .from('categories')
+          .select('id, household_id, name, kind, icon, color, is_default')
+          .eq('household_id', household.id)
+        setCategories((legacy ?? []).map((c) => ({ ...c, is_essential: false })))
+        return
+      }
       setError(err.message)
       return
     }
@@ -45,5 +57,21 @@ export function useCategories() {
     load()
   }, [load])
 
-  return { categories, loading, error, reload: load }
+  useEffect(() => {
+    const handler = () => load()
+    window.addEventListener('ff:categories-changed', handler)
+    return () => window.removeEventListener('ff:categories-changed', handler)
+  }, [load])
+
+  const setEssential = useCallback(async (id: string, value: boolean) => {
+    const { error: err } = await supabase
+      .from('categories')
+      .update({ is_essential: value })
+      .eq('id', id)
+    if (err) throw err
+    setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, is_essential: value } : c)))
+    window.dispatchEvent(new CustomEvent('ff:categories-changed'))
+  }, [])
+
+  return { categories, loading, error, reload: load, setEssential }
 }

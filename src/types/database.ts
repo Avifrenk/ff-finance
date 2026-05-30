@@ -195,6 +195,7 @@ export type Database = {
           icon: string | null
           color: string | null
           is_default: boolean
+          is_essential: boolean
           created_at: string
         }
         Insert: {
@@ -205,6 +206,7 @@ export type Database = {
           icon?: string | null
           color?: string | null
           is_default?: boolean
+          is_essential?: boolean
           created_at?: string
         }
         Update: {
@@ -215,6 +217,7 @@ export type Database = {
           icon?: string | null
           color?: string | null
           is_default?: boolean
+          is_essential?: boolean
           created_at?: string
         }
         Relationships: []

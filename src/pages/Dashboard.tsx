@@ -194,17 +194,30 @@ export function Dashboard() {
     [operations, accountById, categoryById, baseCurrency, ratesByDate, budgetMonthRange],
   )
 
+  // Подушка: если в семье есть хотя бы одна essential-категория, считаем
+  // расход только по ним (точнее: «жизнь без дохода» = обязательные траты).
+  // Иначе fallback на все расходы (старое поведение).
+  const essentialIds = useMemo(() => {
+    const set = new Set<string>()
+    for (const c of categories) {
+      if (c.kind === 'expense' && c.is_essential) set.add(c.id)
+    }
+    return set
+  }, [categories])
+  const essentialMode = essentialIds.size > 0
+
   // Последние 3 полных месяца → расходы за каждый, в base_currency.
   // Подушка считается по этим трём, текущий неполный месяц не учитывается.
   const monthlyExpenses = useMemo<MonthlyExpense[]>(() => {
     const keys = lastFullMonthKeys(3)
+    const filter = essentialMode ? essentialIds : undefined
     return keys.map((yyyymm) => {
       const [y, m] = yyyymm.split('-').map(Number)
       const range = monthRange(new Date(y, m - 1, 15))
-      const totals = monthTotals(operations, accountById, baseCurrency, ratesByDate, range)
+      const totals = monthTotals(operations, accountById, baseCurrency, ratesByDate, range, filter)
       return { yyyymm, expense: totals.expense }
     })
-  }, [operations, accountById, baseCurrency, ratesByDate])
+  }, [operations, accountById, baseCurrency, ratesByDate, essentialMode, essentialIds])
 
   // Расписания: тот же viewMode-фильтр (личное — только мои на моих personal).
   const visibleSchedules = useMemo(() => {
@@ -252,6 +265,7 @@ export function Dashboard() {
         monthlyExpenses={monthlyExpenses}
         totalBalance={totalBalance}
         baseCurrency={baseCurrency}
+        essentialMode={essentialMode}
       />
 
       <CryptoPortfolioWidget baseCurrency={baseCurrency} />
