@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "db:push": "node scripts/db-push.mjs",
+    "db:backup": "node scripts/db-dump.mjs",
     "pwa:icons": "node scripts/gen-pwa-icons.mjs"
   },
   "dependencies": {
