@@ -18,12 +18,15 @@ self.addEventListener('push', (event: PushEvent) => {
   }
   const title = data.title ?? 'FF Finance'
   const body = data.body ?? ''
-  const url = data.url ?? '/'
+  const scopePath = new URL(self.registration.scope).pathname
+  const rawUrl = data.url ?? '/'
+  const url = rawUrl.startsWith('/') ? scopePath.replace(/\/$/, '') + rawUrl : rawUrl
+  const iconUrl = scopePath + 'pwa-192x192.png'
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
-      icon: '/pwa-192x192.png',
-      badge: '/pwa-192x192.png',
+      icon: iconUrl,
+      badge: iconUrl,
       data: { url },
     }),
   )
