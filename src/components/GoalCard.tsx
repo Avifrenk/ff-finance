@@ -72,6 +72,14 @@ export function GoalCard({
                 ⚡ {goal.auto_percent_of_income}%
               </span>
             )}
+            {goal.auto_percent_of_income === 0 && goal.auto_amount_per_income > 0 && (
+              <span
+                className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 shrink-0"
+                title={`С каждого дохода автоматически ${goal.auto_amount_per_income} ${baseCurrency}`}
+              >
+                ⚡ {formatMoney(goal.auto_amount_per_income, baseCurrency, 0)}
+              </span>
+            )}
           </div>
           {goal.target_date && (
             <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">

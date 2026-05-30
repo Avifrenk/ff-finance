@@ -11,6 +11,7 @@ export interface Goal {
   target_date: string | null
   visibility: 'personal' | 'shared'
   auto_percent_of_income: number
+  auto_amount_per_income: number
   icon: string | null
   color: string | null
   is_archived: boolean
@@ -24,6 +25,7 @@ export interface CreateGoalInput {
   target_date?: string | null
   visibility: 'personal' | 'shared'
   auto_percent_of_income?: number
+  auto_amount_per_income?: number
   icon?: string | null
   color?: string | null
 }
@@ -34,12 +36,13 @@ export interface UpdateGoalInput {
   target_date?: string | null
   visibility?: 'personal' | 'shared'
   auto_percent_of_income?: number
+  auto_amount_per_income?: number
   icon?: string | null
   color?: string | null
 }
 
 const SELECT_COLS =
-  'id, household_id, owner_profile_id, name, target_amount, target_date, visibility, auto_percent_of_income, icon, color, is_archived, created_at, updated_at'
+  'id, household_id, owner_profile_id, name, target_amount, target_date, visibility, auto_percent_of_income, auto_amount_per_income, icon, color, is_archived, created_at, updated_at'
 
 export function useGoals({ includeArchived = false }: { includeArchived?: boolean } = {}) {
   const { household, profile } = useApp()
@@ -101,6 +104,7 @@ export function useGoals({ includeArchived = false }: { includeArchived?: boolea
           target_date: input.target_date ?? null,
           visibility: input.visibility,
           auto_percent_of_income: input.auto_percent_of_income ?? 0,
+          auto_amount_per_income: input.auto_amount_per_income ?? 0,
           icon: input.icon ?? null,
           color: input.color ?? null,
         })
