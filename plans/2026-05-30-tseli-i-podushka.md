@@ -28,7 +28,7 @@ UX-фильтр Фазы 3 («поймёт ли жена с первого ра�
 
 ## Фазы
 
-- [ ] **Фаза 4.1. Миграция `goals` + `goal_contributions` + RLS + GRANT.**
+- [x] **Фаза 4.1. Миграция `goals` + `goal_contributions` + RLS + GRANT.** _(SQL `supabase/migrations/20260530200000_goals.sql` применён к prod 2026-05-30 через `npm run db:push`. Триггер `goals_touch_updated_at`, partial unique index `goal_contributions_auto_unique` для дедупа auto-зачислений в Фазе 4.5. `types/database.ts` синхронизирован.)_
   - Миграция `supabase/migrations/20260530200000_goals.sql`:
     - `goals`:
       - `id uuid pk default gen_random_uuid()`
@@ -71,7 +71,7 @@ UX-фильтр Фазы 3 («поймёт ли жена с первого ра�
   - Применить: `npm run db:push`.
   - `types/database.ts` — добавить `goals`, `goal_contributions` (Row/Insert/Update). Без них хуки не типизируются.
 
-- [ ] **Фаза 4.2. Хуки `useGoals` / `useGoalContributions`.**
+- [x] **Фаза 4.2. Хуки `useGoals` / `useGoalContributions`.**
   - `src/hooks/useGoals.ts`:
     - `useGoals({ includeArchived?: boolean })` — список целей с учётом RLS (партнёр сам по visibility отфильтрован на БД).
     - `create(input)` / `update(id, patch)` / `archive(id)` / `unarchive(id)` / `remove(id)`.
