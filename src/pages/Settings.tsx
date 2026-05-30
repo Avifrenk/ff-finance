@@ -1,10 +1,11 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../contexts/useApp'
 import { useAccounts, type Account } from '../hooks/useAccounts'
 import { useCategories } from '../hooks/useCategories'
 import { useSchedules, describeCadence, type Schedule } from '../hooks/useSchedules'
 import { useCurrencies, type Currency } from '../hooks/useCurrencies'
+import { monthKey, useBudgets } from '../hooks/useBudgets'
 import { AuthInput, ErrorBox, PrimaryButton, SecondaryButton } from '../components/AuthControls'
 import { currencySymbol, formatDate, formatMoney } from '../lib/format'
 
@@ -29,6 +30,8 @@ export function Settings() {
       <BaseCurrencySection />
 
       <AccountsSection />
+
+      <BudgetsSection />
 
       <SchedulesSection />
 
@@ -101,6 +104,204 @@ function BaseCurrencySection() {
       {error && <div className="mt-2"><ErrorBox>{error}</ErrorBox></div>}
     </section>
   )
+}
+
+function BudgetsSection() {
+  const { household } = useApp()
+  const { categories } = useCategories()
+  const [month, setMonth] = useState(() => monthKey(new Date()))
+  const { budgets, loading, error, upsert, remove, copyFromPreviousMonth } = useBudgets(month)
+  const [copyInfo, setCopyInfo] = useState<string | null>(null)
+  const [copyErr, setCopyErr] = useState<string | null>(null)
+
+  const baseCurrency = household?.base_currency ?? 'ILS'
+  const expenseCategories = useMemo(
+    () => categories.filter((c) => c.kind === 'expense'),
+    [categories],
+  )
+  const budgetByCategory = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const b of budgets) map.set(b.category_id, Number(b.amount))
+    return map
+  }, [budgets])
+
+  function shiftMonth(delta: number) {
+    const [y, m] = month.split('-').map(Number)
+    const d = new Date(y, m - 1 + delta, 1)
+    setMonth(monthKey(d))
+  }
+
+  async function handleCopy() {
+    setCopyErr(null)
+    setCopyInfo(null)
+    try {
+      const n = await copyFromPreviousMonth()
+      setCopyInfo(n === 0 ? 'Нечего копировать' : `Скопировано: ${n}`)
+      setTimeout(() => setCopyInfo(null), 2000)
+    } catch (e) {
+      setCopyErr(e instanceof Error ? e.message : 'Ошибка')
+    }
+  }
+
+  return (
+    <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-5">
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="font-semibold text-slate-900 dark:text-slate-100">Бюджеты на месяц</h2>
+        <button
+          onClick={handleCopy}
+          className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+          title="Скопировать значения из прошлого месяца (не трогая уже заданные)"
+        >
+          Скопировать с прошлого
+        </button>
+      </div>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+        Потолок расходов на категорию. Сумма в {currencySymbol(baseCurrency)} {baseCurrency} (валюта
+        семьи). Дашборд покажет прогресс и подсветит превышение.
+      </p>
+
+      <div className="flex items-center gap-3 mb-3">
+        <button
+          onClick={() => shiftMonth(-1)}
+          className="px-2 py-1 text-sm rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+          aria-label="Предыдущий месяц"
+        >
+          ‹
+        </button>
+        <div className="text-sm font-medium text-slate-900 dark:text-slate-100 tabular-nums">
+          {humanMonth(month)}
+        </div>
+        <button
+          onClick={() => shiftMonth(1)}
+          className="px-2 py-1 text-sm rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+          aria-label="Следующий месяц"
+        >
+          ›
+        </button>
+      </div>
+
+      {copyInfo && <p className="text-xs text-emerald-600 dark:text-emerald-400 mb-2">{copyInfo}</p>}
+      {copyErr && <ErrorBox>{copyErr}</ErrorBox>}
+
+      {loading && <p className="text-sm text-slate-500">Загрузка…</p>}
+      {error && <ErrorBox>{error}</ErrorBox>}
+
+      {!loading && expenseCategories.length === 0 && (
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Сначала создайте категории расходов — пока бюджет задавать некуда.
+        </p>
+      )}
+
+      {expenseCategories.length > 0 && (
+        <ul className="divide-y divide-slate-200 dark:divide-slate-700 -my-2">
+          {expenseCategories.map((c) => (
+            <BudgetRow
+              key={c.id}
+              icon={c.icon}
+              name={c.name}
+              currentAmount={budgetByCategory.get(c.id) ?? null}
+              baseCurrency={baseCurrency}
+              onSave={(amount) => upsert(c.id, amount)}
+              onClear={() => remove(c.id)}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function BudgetRow({
+  icon,
+  name,
+  currentAmount,
+  baseCurrency,
+  onSave,
+  onClear,
+}: {
+  icon: string | null
+  name: string
+  currentAmount: number | null
+  baseCurrency: string
+  onSave: (amount: number) => Promise<unknown>
+  onClear: () => Promise<unknown>
+}) {
+  const [value, setValue] = useState(currentAmount !== null ? String(currentAmount) : '')
+  const [saving, setSaving] = useState(false)
+  const [rowError, setRowError] = useState<string | null>(null)
+
+  /* eslint-disable react-hooks/set-state-in-effect --
+     Внешний источник истины (currentAmount из props) — перенакатываем
+     локальное значение при смене месяца / удалённом upsert. */
+  useEffect(() => {
+    setValue(currentAmount !== null ? String(currentAmount) : '')
+  }, [currentAmount])
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  async function commit() {
+    setRowError(null)
+    const trimmed = value.trim().replace(',', '.')
+    if (trimmed === '') {
+      if (currentAmount === null) return // нечего удалять
+      setSaving(true)
+      try {
+        await onClear()
+      } catch (e) {
+        setRowError(e instanceof Error ? e.message : 'Ошибка')
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
+    const num = Number(trimmed)
+    if (!isFinite(num) || num <= 0) {
+      setRowError('Положительное число')
+      return
+    }
+    if (num === currentAmount) return // ничего не изменилось
+    setSaving(true)
+    try {
+      await onSave(num)
+    } catch (e) {
+      setRowError(e instanceof Error ? e.message : 'Ошибка')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <li className="py-2 flex items-center gap-3">
+      <span className="text-base shrink-0 w-6 text-center">{icon ?? '•'}</span>
+      <span className="flex-1 min-w-0 truncate text-sm text-slate-900 dark:text-slate-100">
+        {name}
+      </span>
+      <div className="flex items-center gap-1 shrink-0">
+        <input
+          type="text"
+          inputMode="decimal"
+          placeholder="0"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+          }}
+          disabled={saving}
+          className="w-24 text-right tabular-nums px-2 py-1 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500"
+        />
+        <span className="text-xs text-slate-500 dark:text-slate-400 w-4">
+          {currencySymbol(baseCurrency)}
+        </span>
+      </div>
+      {rowError && <span className="text-xs text-rose-500 ml-2">{rowError}</span>}
+    </li>
+  )
+}
+
+function humanMonth(monthIso: string): string {
+  const [y, m] = monthIso.split('-').map(Number)
+  const d = new Date(y, m - 1, 1)
+  return d.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
 }
 
 function SchedulesSection() {

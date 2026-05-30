@@ -4,22 +4,45 @@ import { useApp } from '../contexts/useApp'
 import { useAccounts } from '../hooks/useAccounts'
 import { useCategories } from '../hooks/useCategories'
 import { useOperations } from '../hooks/useOperations'
-import { useSchedules, describeCadence } from '../hooks/useSchedules'
+import { useSchedules } from '../hooks/useSchedules'
 import { useFxRates } from '../hooks/useFxRates'
+import { monthKey, useBudgets } from '../hooks/useBudgets'
 import { ErrorBox, PrimaryButton, SecondaryButton } from '../components/AuthControls'
-import { formatDate, formatMoney } from '../lib/format'
+import { PeriodPicker } from '../components/PeriodPicker'
+import { rangeFor, type DashboardPeriod } from '../lib/period'
+import { MonthCompareCards } from '../components/MonthCompareCards'
+import { CategoryBreakdown } from '../components/CategoryBreakdown'
+import { BudgetsProgress } from '../components/BudgetsProgress'
+import { PaymentsCalendar } from '../components/PaymentsCalendar'
+import { formatMoney } from '../lib/format'
 import { convertMoney } from '../lib/fx'
+import {
+  aggregateByCategory,
+  collapseTail,
+  monthRange,
+  monthTotals,
+  previousMonthRange,
+  last30DaysRange,
+  quarterToDateRange,
+} from '../lib/aggregate'
+import type { Category } from '../hooks/useCategories'
 
 export function Dashboard() {
   const { household, viewMode, profile, members } = useApp()
   const { accounts: allAccounts } = useAccounts()
+  const { categories } = useCategories()
   const { operations: allOperations, loading } = useOperations('all')
+  const { schedules } = useSchedules()
   const { ratesByDate } = useFxRates()
   const baseCurrency = household?.base_currency ?? 'ILS'
 
-  // viewMode-фильтрация:
-  //   personal — только мои personal-счета и мои операции на них;
-  //   household — только shared-счета и все видимые операции на них.
+  const [period, setPeriod] = useState<DashboardPeriod>('month')
+  const currentRange = useMemo(() => rangeFor(period), [period])
+  // Для сравнения: к каждому периоду подбираем «предыдущий» аналогичной длины.
+  const compareRange = useMemo(() => previousRangeFor(period), [period])
+
+  // viewMode-фильтрация: личный кабинет = свои personal-счета и свои операции;
+  // семейный = shared-счета и все видимые операции.
   const accounts = useMemo(() => {
     if (viewMode === 'personal') {
       return allAccounts.filter(
@@ -38,22 +61,30 @@ export function Dashboard() {
     return base
   }, [allOperations, accounts, viewMode, profile?.id])
 
-  // Балансы по счёту: initial_balance + sum(income) - sum(expense).
+  const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts])
+  const fullAccountById = useMemo(
+    () => new Map(allAccounts.map((a) => [a.id, a])),
+    [allAccounts],
+  )
+  const categoryById = useMemo<Map<string, Category>>(
+    () => new Map(categories.map((c) => [c.id, c])),
+    [categories],
+  )
+
+  // Балансы по счёту (всё время, не зависит от period).
   const balanceByAccount = useMemo(() => {
+    const allOpsByAccount = allOperations.filter((o) => accountById.has(o.account_id))
     const map = new Map<string, number>()
-    for (const a of accounts) {
-      map.set(a.id, Number(a.initial_balance))
-    }
-    for (const op of operations) {
+    for (const a of accounts) map.set(a.id, Number(a.initial_balance))
+    for (const op of allOpsByAccount) {
       const delta = op.kind === 'expense' ? -Number(op.amount) : Number(op.amount)
       map.set(op.account_id, (map.get(op.account_id) ?? 0) + delta)
     }
     return map
-  }, [accounts, operations])
+  }, [accounts, allOperations, accountById])
 
-  // Общий баланс в base_currency: каждый счёт конвертим по последнему курсу.
-  // Если курса нет — пропускаем счёт и подсвечиваем это флагом.
-  const { totalBalance, missingRate } = useMemo(() => {
+  // Общий баланс в base_currency (всё время).
+  const { totalBalance, missingRate: missingBalanceRate } = useMemo(() => {
     let sum = 0
     let missing = false
     for (const a of accounts) {
@@ -72,29 +103,99 @@ export function Dashboard() {
     return { totalBalance: sum, missingRate: missing }
   }, [accounts, balanceByAccount, baseCurrency, ratesByDate])
 
-  // Месячные итоги — конвертим каждую операцию в base_currency на её дату.
-  const monthTotals = useMemo(() => {
-    const accountById = new Map(accounts.map((a) => [a.id, a]))
-    const now = new Date()
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
-    let income = 0
-    let expense = 0
-    for (const op of operations) {
-      if (op.occurred_at < monthStart) continue
-      if (op.transfer_id !== null) continue // переводы не дают ни дохода, ни расхода
-      const acc = accountById.get(op.account_id)
-      const currency = acc?.currency ?? baseCurrency
-      const amount = Number(op.amount)
-      const conv =
-        currency === baseCurrency
-          ? amount
-          : convertMoney(amount, currency, baseCurrency, ratesByDate, op.occurred_at)
-      if (conv === null) continue
-      if (op.kind === 'income') income += conv
-      else expense += conv
+  // Итоги текущего и прошлого периода.
+  const currentTotals = useMemo(
+    () => monthTotals(operations, accountById, baseCurrency, ratesByDate, currentRange),
+    [operations, accountById, baseCurrency, ratesByDate, currentRange],
+  )
+  const previousTotals = useMemo(
+    () => monthTotals(operations, accountById, baseCurrency, ratesByDate, compareRange),
+    [operations, accountById, baseCurrency, ratesByDate, compareRange],
+  )
+  const previousHasData =
+    previousTotals.income > 0 || previousTotals.expense > 0 || hasAnyOpInRange(operations, compareRange)
+
+  // Разбивка расходов и доходов по категориям за текущий период.
+  const expenseAgg = useMemo(
+    () =>
+      aggregateByCategory(
+        operations,
+        accountById,
+        categoryById,
+        baseCurrency,
+        ratesByDate,
+        'expense',
+        currentRange,
+      ),
+    [operations, accountById, categoryById, baseCurrency, ratesByDate, currentRange],
+  )
+  const expenseItems = useMemo(() => collapseTail(expenseAgg.items, 8), [expenseAgg.items])
+
+  const incomeAgg = useMemo(
+    () =>
+      aggregateByCategory(
+        operations,
+        accountById,
+        categoryById,
+        baseCurrency,
+        ratesByDate,
+        'income',
+        currentRange,
+      ),
+    [operations, accountById, categoryById, baseCurrency, ratesByDate, currentRange],
+  )
+
+  // Бюджеты текущего месяца (всегда календарный — переключатель period
+  // меняет только totals/pie, не бюджеты, иначе сравнивать с потолком
+  // нечестно). Если выбран prev-month — бюджеты тоже за тот месяц.
+  const budgetsMonthKey = useMemo(() => {
+    if (period === 'prev-month') {
+      const d = new Date()
+      d.setMonth(d.getMonth() - 1)
+      return monthKey(d)
     }
-    return { income, expense, net: income - expense }
-  }, [operations, accounts, baseCurrency, ratesByDate])
+    return monthKey(new Date())
+  }, [period])
+  const { budgets } = useBudgets(budgetsMonthKey)
+  const budgetByCategory = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const b of budgets) map.set(b.category_id, Number(b.amount))
+    return map
+  }, [budgets])
+
+  // Бюджет считается против расходов за тот же месяц (а не за period-выборку),
+  // чтобы «прогресс месяца» был честным даже при выборе «30 дней» / «квартал».
+  const budgetMonthRange = useMemo(() => {
+    if (period === 'prev-month') {
+      return previousMonthRange()
+    }
+    return monthRange()
+  }, [period])
+  const spentForBudgets = useMemo(
+    () =>
+      aggregateByCategory(
+        operations,
+        accountById,
+        categoryById,
+        baseCurrency,
+        ratesByDate,
+        'expense',
+        budgetMonthRange,
+      ),
+    [operations, accountById, categoryById, baseCurrency, ratesByDate, budgetMonthRange],
+  )
+
+  // Расписания: тот же viewMode-фильтр (личное — только мои на моих personal).
+  const visibleSchedules = useMemo(() => {
+    return schedules.filter((s) => {
+      const a = fullAccountById.get(s.account_id)
+      if (!a) return false
+      if (viewMode === 'personal') {
+        return a.visibility === 'personal' && a.owner_profile_id === profile?.id
+      }
+      return a.visibility === 'shared'
+    })
+  }, [schedules, fullAccountById, viewMode, profile?.id])
 
   if (!household) return null
 
@@ -112,20 +213,69 @@ export function Dashboard() {
         </h1>
       </header>
 
-      <section className="grid sm:grid-cols-2 gap-4">
-        <BigStat
-          label="Общий баланс"
-          value={formatMoney(totalBalance, baseCurrency)}
-          sub={missingRate ? 'Некоторые счета не учтены — нет курса' : undefined}
-        />
-        <BigStat
-          label="Этот месяц"
-          value={formatMoney(monthTotals.net, baseCurrency)}
-          sub={`+${formatMoney(monthTotals.income, baseCurrency)} − ${formatMoney(monthTotals.expense, baseCurrency)}`}
-          positive={monthTotals.net >= 0}
-          negative={monthTotals.net < 0}
-        />
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-5">
+        <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          Общий баланс
+        </div>
+        <div className="text-3xl font-semibold mt-1 text-slate-900 dark:text-slate-100">
+          {formatMoney(totalBalance, baseCurrency)}
+        </div>
+        {missingBalanceRate && (
+          <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+            Некоторые счета не учтены — нет курса
+          </div>
+        )}
       </section>
+
+      <div className="flex items-center gap-3">
+        <PeriodPicker value={period} onChange={setPeriod} />
+        <div className="text-xs text-slate-500 dark:text-slate-400">
+          {humanRange(currentRange.from, currentRange.to)}
+        </div>
+      </div>
+
+      <MonthCompareCards
+        current={currentTotals}
+        previous={previousTotals}
+        previousHasData={previousHasData}
+        baseCurrency={baseCurrency}
+      />
+
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-5">
+        <h2 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">
+          Расходы по категориям
+        </h2>
+        <CategoryBreakdown
+          items={expenseItems}
+          total={expenseAgg.total}
+          baseCurrency={baseCurrency}
+          emptyHint="За этот период расходов нет."
+        />
+        {expenseAgg.missingRate && (
+          <div className="text-xs text-amber-600 dark:text-amber-400 mt-3">
+            Некоторые операции не учтены — нет курса
+          </div>
+        )}
+      </section>
+
+      {incomeAgg.items.length > 0 && (
+        <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-5">
+          <h2 className="font-semibold text-slate-900 dark:text-slate-100 mb-3">Доходы</h2>
+          <CategoryBreakdown
+            items={incomeAgg.items}
+            total={incomeAgg.total}
+            baseCurrency={baseCurrency}
+            emptyHint="За этот период доходов нет."
+          />
+        </section>
+      )}
+
+      <BudgetsProgress
+        budgetByCategory={budgetByCategory}
+        spentItems={spentForBudgets.items}
+        categoryById={categoryById}
+        baseCurrency={baseCurrency}
+      />
 
       <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-5">
         <h2 className="font-semibold text-slate-900 dark:text-slate-100 mb-3">Счета</h2>
@@ -159,108 +309,56 @@ export function Dashboard() {
         </ul>
       </section>
 
-      <UpcomingSchedules />
+      <PaymentsCalendar
+        schedules={visibleSchedules}
+        accountById={fullAccountById}
+        categoryById={categoryById}
+      />
 
       {isOwner && !partnerJoined && <InviteSection />}
     </div>
   )
 }
 
-function UpcomingSchedules() {
-  const { viewMode, profile } = useApp()
-  const { schedules } = useSchedules()
-  const { accounts } = useAccounts()
-  const { categories } = useCategories()
-
-  const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts])
-  const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
-
-  const upcoming = useMemo(() => {
-    const today = new Date()
-    const horizon = new Date()
-    horizon.setDate(horizon.getDate() + 7)
-    const horizonIso = horizon.toISOString().slice(0, 10)
-    const todayIso = today.toISOString().slice(0, 10)
-    return schedules
-      .filter((s) => s.is_active && s.next_run_at <= horizonIso && s.next_run_at >= todayIso)
-      .filter((s) => {
-        // Уважаем viewMode так же, как делает Operations/Dashboard.
-        const a = accountById.get(s.account_id)
-        if (!a) return false
-        if (viewMode === 'personal') {
-          return a.visibility === 'personal' && a.owner_profile_id === profile?.id
-        }
-        return a.visibility === 'shared'
-      })
-      .sort((a, b) => a.next_run_at.localeCompare(b.next_run_at))
-  }, [schedules, accountById, viewMode, profile?.id])
-
-  if (upcoming.length === 0) return null
-
-  return (
-    <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-5">
-      <h2 className="font-semibold text-slate-900 dark:text-slate-100 mb-3">Ближайшие 7 дней</h2>
-      <ul className="divide-y divide-slate-200 dark:divide-slate-700 -my-2">
-        {upcoming.map((s) => {
-          const account = accountById.get(s.account_id)
-          const category = s.category_id ? categoryById.get(s.category_id) : null
-          return (
-            <li key={s.id} className="py-3 flex items-center gap-3">
-              <div className="h-9 w-9 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-sm">
-                {category?.icon ?? (s.kind === 'expense' ? '💸' : '💰')}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
-                  {category?.name ?? (s.kind === 'expense' ? 'Расход' : 'Доход')}
-                </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">
-                  {formatDate(s.next_run_at)} · {describeCadence(s.cadence_rule)}
-                  {account ? ` · ${account.name}` : ''}
-                </div>
-              </div>
-              <div
-                className={`text-sm font-semibold whitespace-nowrap ${
-                  s.kind === 'expense'
-                    ? 'text-slate-900 dark:text-slate-100'
-                    : 'text-emerald-600 dark:text-emerald-400'
-                }`}
-              >
-                {s.kind === 'expense' ? '−' : '+'}
-                {formatMoney(Number(s.amount), account?.currency ?? 'ILS').replace('−', '')}
-              </div>
-            </li>
-          )
-        })}
-      </ul>
-    </section>
-  )
+/** Предыдущий период такой же длины, как currentRange. */
+function previousRangeFor(period: DashboardPeriod) {
+  if (period === 'month') return previousMonthRange()
+  if (period === 'prev-month') {
+    // «Прошлый» относительно prev-month → позапрошлый.
+    const ref = new Date()
+    ref.setMonth(ref.getMonth() - 1)
+    return previousMonthRange(ref)
+  }
+  if (period === '30days') {
+    // 30 дней до 30-дневного окна.
+    const past = new Date()
+    past.setDate(past.getDate() - 30)
+    return last30DaysRange(past)
+  }
+  // quarter → предыдущий полный квартал относительно того, в котором начался текущий.
+  const now = new Date()
+  const qStartMonth = Math.floor(now.getMonth() / 3) * 3
+  const lastDayOfPrevQuarter = new Date(now.getFullYear(), qStartMonth, 0)
+  return quarterToDateRange(lastDayOfPrevQuarter)
 }
 
-function BigStat({
-  label,
-  value,
-  sub,
-  positive,
-  negative,
-}: {
-  label: string
-  value: string
-  sub?: string
-  positive?: boolean
-  negative?: boolean
-}) {
-  const valueColor = positive
-    ? 'text-emerald-600 dark:text-emerald-400'
-    : negative
-      ? 'text-rose-600 dark:text-rose-400'
-      : 'text-slate-900 dark:text-slate-100'
-  return (
-    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-5">
-      <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">{label}</div>
-      <div className={`text-2xl font-semibold mt-1 ${valueColor}`}>{value}</div>
-      {sub && <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{sub}</div>}
-    </div>
-  )
+function humanRange(fromIso: string, toIso: string): string {
+  const fmt = (iso: string) => {
+    const [y, m, d] = iso.split('-').map(Number)
+    return new Date(y, m - 1, d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+  }
+  return `${fmt(fromIso)} – ${fmt(toIso)}`
+}
+
+function hasAnyOpInRange(
+  ops: { occurred_at: string; transfer_id: string | null }[],
+  range: { from: string; to: string },
+): boolean {
+  for (const o of ops) {
+    if (o.transfer_id !== null) continue
+    if (o.occurred_at >= range.from && o.occurred_at <= range.to) return true
+  }
+  return false
 }
 
 function InviteSection() {
