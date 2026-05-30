@@ -14,7 +14,7 @@ export function Debts() {
   const { household, members } = useApp()
   const baseCurrency = household?.base_currency ?? 'ILS'
   const { summary, balances, loading } = useDebts()
-  const { transfers } = useTransfers()
+  const { transfers, remove: removeTransfer } = useTransfers()
   const { accounts } = useAccounts()
   const { operations } = useOperations('all')
   const { ratesByDate } = useFxRates()
@@ -148,7 +148,7 @@ export function Debts() {
                   const toName = toAcc ? memberById.get(toAcc.owner_profile_id) ?? '?' : '?'
                   return (
                     <li key={s.id} className="py-3 flex items-center justify-between gap-3">
-                      <div>
+                      <div className="min-w-0">
                         <div className="text-sm text-slate-900 dark:text-slate-100">
                           {fromName} → {toName}
                         </div>
@@ -157,10 +157,23 @@ export function Debts() {
                           {s.note && ` · ${s.note}`}
                         </div>
                       </div>
-                      <div className="text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100 whitespace-nowrap">
-                        {fromAcc
-                          ? formatMoney(s.amount, fromAcc.currency, 0)
-                          : formatMoney(s.amount, baseCurrency, 0)}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                          {fromAcc
+                            ? formatMoney(s.amount, fromAcc.currency, 0)
+                            : formatMoney(s.amount, baseCurrency, 0)}
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (confirm(`Удалить погашение ${fromName} → ${toName}? Это откатит две связанные операции и долг пересчитается.`)) {
+                              await removeTransfer(s.id)
+                            }
+                          }}
+                          className="text-xs text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
+                          title="Удалить погашение"
+                        >
+                          ✕
+                        </button>
                       </div>
                     </li>
                   )

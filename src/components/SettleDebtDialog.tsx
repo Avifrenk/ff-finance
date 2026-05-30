@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useAccounts } from '../hooks/useAccounts'
 import { useTransfers } from '../hooks/useTransfers'
+import { useFxRates } from '../hooks/useFxRates'
 import type { DebtSummary } from '../lib/debts'
 import { AuthInput, ErrorBox, PrimaryButton, SecondaryButton } from './AuthControls'
+import { convertMoney } from '../lib/fx'
 import { formatMoney } from '../lib/format'
 
 interface Props {
@@ -25,6 +27,7 @@ function todayLocalDate(): string {
 export function SettleDebtDialog({ open, onClose, summary, baseCurrency }: Props) {
   const { accounts } = useAccounts()
   const { create } = useTransfers()
+  const { ratesByDate } = useFxRates()
 
   const debtorAccounts = useMemo(
     () => accounts.filter((a) => a.visibility === 'personal' && a.owner_profile_id === summary.fromProfileId),
@@ -48,14 +51,30 @@ export function SettleDebtDialog({ open, onClose, summary, baseCurrency }: Props
      form-reset при открытии. */
   useEffect(() => {
     if (!open) return
-    setFromAccountId(debtorAccounts[0]?.id ?? '')
-    setToAccountId(creditorAccounts[0]?.id ?? '')
-    setAmount(summary.amount.toFixed(2))
-    setToAmount('')
+    const defaultFrom = debtorAccounts[0]
+    const defaultTo = creditorAccounts[0]
+    setFromAccountId(defaultFrom?.id ?? '')
+    setToAccountId(defaultTo?.id ?? '')
+    // Дефолтная сумма — в валюте from-счёта. summary.amount в base_currency,
+    // конвертируем при необходимости (через сегодняшний курс ECB).
+    let defaultAmount = summary.amount
+    if (defaultFrom && defaultFrom.currency !== baseCurrency) {
+      const conv = convertMoney(summary.amount, baseCurrency, defaultFrom.currency, ratesByDate)
+      if (conv !== null) defaultAmount = conv
+    }
+    setAmount(defaultAmount.toFixed(2))
+    // Дефолтная сумма зачисления (для cross-currency) — та же сумма из summary
+    // в валюте to-счёта.
+    if (defaultTo && defaultFrom && defaultFrom.currency !== defaultTo.currency) {
+      const convTo = convertMoney(summary.amount, baseCurrency, defaultTo.currency, ratesByDate)
+      setToAmount(convTo !== null ? convTo.toFixed(2) : '')
+    } else {
+      setToAmount('')
+    }
     setOccurredAt(todayLocalDate())
     setNote('Погашение долга')
     setError(null)
-  }, [open, debtorAccounts, creditorAccounts, summary.amount])
+  }, [open, debtorAccounts, creditorAccounts, summary.amount, baseCurrency, ratesByDate])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const fromAccount = useMemo(

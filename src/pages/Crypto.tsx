@@ -32,7 +32,7 @@ export function Crypto() {
 
   const { coins } = useCryptoCoins()
   const { holdings, loading: holdingsLoading, remove } = useCryptoHoldings()
-  const { transactions } = useCryptoTransactions()
+  const { transactions, remove: removeTx } = useCryptoTransactions()
   const { priceByCoinId } = useCryptoPrices(base)
 
   const [newHoldingOpen, setNewHoldingOpen] = useState(false)
@@ -69,12 +69,15 @@ export function Crypto() {
   const pnlTotal =
     overallPnl.unrealized === null ? null : overallPnl.realized + overallPnl.unrealized
 
-  const pnlPercent = useMemo(() => {
-    if (pnlTotal === null) return null
-    const denom = allocation.totalValue - overallPnl.unrealized!
-    if (denom <= 0) return null
-    return (pnlTotal / denom) * 100
-  }, [pnlTotal, allocation.totalValue, overallPnl.unrealized])
+  // Процент — только по нереализованной части (текущая стоимость vs cost basis
+  // оставшихся лотов). Реализованный P&L относится к УЖЕ продаваемым лотам,
+  // у них своя «база», смешивать в один процент некорректно.
+  const unrealizedPercent = useMemo(() => {
+    if (overallPnl.unrealized === null) return null
+    const costBasisOfRemaining = allocation.totalValue - overallPnl.unrealized
+    if (costBasisOfRemaining <= 0) return null
+    return (overallPnl.unrealized / costBasisOfRemaining) * 100
+  }, [overallPnl.unrealized, allocation.totalValue])
 
   // Сортированные транзакции для ленты (desc по дате).
   const txFeed = useMemo(
@@ -151,10 +154,10 @@ export function Crypto() {
                   {pnlTotal === null
                     ? 'цены ещё не подтянулись'
                     : `${pnlTotal >= 0 ? '+' : '−'}${formatMoney(Math.abs(pnlTotal), baseCurrency, 0).replace('−', '')}`}
-                  {pnlPercent !== null && pnlTotal !== null && (
-                    <span className="text-xs text-slate-500 dark:text-slate-400 ml-1">
-                      ({pnlPercent >= 0 ? '+' : ''}
-                      {pnlPercent.toFixed(1)}%)
+                  {unrealizedPercent !== null && (
+                    <span className="text-xs text-slate-500 dark:text-slate-400 ml-1" title="Нереализованная доходность от cost basis оставшихся лотов">
+                      ({unrealizedPercent >= 0 ? '+' : ''}
+                      {unrealizedPercent.toFixed(1)}% unrealized)
                     </span>
                   )}
                 </div>
@@ -256,6 +259,17 @@ export function Crypto() {
                           <span className="text-slate-500 dark:text-slate-400"> · {tx.note}</span>
                         )}
                       </span>
+                      <button
+                        onClick={async () => {
+                          if (confirm(`Удалить операцию ${kindLabel(tx.kind)} ${tx.amount} ${symbol}?`)) {
+                            await removeTx(tx.id)
+                          }
+                        }}
+                        className="text-xs text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 shrink-0"
+                        title="Удалить операцию"
+                      >
+                        ✕
+                      </button>
                     </li>
                   )
                 })}
