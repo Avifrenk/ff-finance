@@ -226,9 +226,15 @@ UX-фильтр прежний: всё, что видит жена, понятн
 - Фаза 8.4.1–8.4.6: VAPID-ключи, миграции `push_subscriptions` + `notification_queue` + триггеры `notify_budget_exceeded` / `notify_goal_reached` / `notify_settlement` (с dedup_key), хук `usePush`, секция «🔔 Уведомления» в Settings, SW (переход на `injectManifest`) с обработчиками `push`/`notificationclick`, Edge Function `send-push` на Deno + `web-push@3.6.7`.
 - Фаза 8.6: `npm run db:backup` через `pg_dump` → `~/Backups/ff-finance/*.sql.gz`, раздел «Бэкап и восстановление БД» в README.
 
-**Отложено (требует чужих сервисов, к которым у агента нет доступа):**
-- Фаза 8.4.7: деплой Edge Function `send-push` и применение `20260530600200_send_push_cron.sql`. Без этого backend-часть пушей не работает: код в репо есть, секреты VAPID сгенерированы локально, но `npx supabase functions deploy` требует Personal Access Token. Пока pg_cron-миграция в `supabase/migrations/`, но **не накатана** — иначе cron каждые 5 минут долбил бы 404. После получения PAT нужно: (a) задеплоить `send-push` и заодно `fetch-coingecko-prices` (tail Фазы 5), (b) `supabase secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... VAPID_SUBJECT=mailto:avramshulga@gmail.com`, (c) `npm run db:push` — применится 600200_send_push_cron.
-- Фаза 8.5: деплой фронта на Vercel. `vercel.json` готов (SPA-rewrite, кэш-заголовки для `sw.js`/manifest/assets), `prebuild` сам генерит иконки. Нужны: Vercel-аккаунт, env vars в Vercel UI (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_VAPID_PUBLIC_KEY`), добавление prod-URL в Supabase Auth → Redirect URLs.
+**Также закрыто (8.4.7, после получения Supabase PAT):**
+- `npx supabase functions deploy send-push --project-ref cngrrvfqwaqfydmfhiex --no-verify-jwt` — успешно.
+- `npx supabase functions deploy fetch-coingecko-prices --project-ref cngrrvfqwaqfydmfhiex --no-verify-jwt` — успешно (tail Фазы 5: pg_cron этой функции больше не уходит в 404).
+- `npx supabase secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... VAPID_SUBJECT=mailto:avramshulga@gmail.com --project-ref cngrrvfqwaqfydmfhiex` — успешно.
+- Smoke-curl на `/functions/v1/send-push` → `{"ok":true,"processed":0,"sent":0,"ms":~300}`.
+- Миграция `20260530600200_send_push_cron.sql` накатана — pg_cron каждые 5 мин зовёт send-push.
+
+**Отложено (нужно ручное действие в Vercel UI):**
+- Фаза 8.5: деплой фронта на Vercel. У аккаунта `avifrenk` нет personal scope (никогда не открывал dashboard), а через API team создать не удалось — Vercel требует payment method. После того как пользователь один раз пройдёт Hobby-онбординг на https://vercel.com/dashboard, CLI деплоит сам без дополнительных вопросов: `vercel link --yes` → `vercel env add` x3 (значения из `.env.local`) → `vercel deploy --prod`. Затем добавить prod-URL в Supabase Auth → Redirect URLs (через REST API под тем же PAT, без UI).
 - «Тестирование с супругой и итерация» — следствие отложенного 8.5.
 
 **Follow-up'ы из плана:**

@@ -87,16 +87,17 @@ src/
 - [x] История переводов между супругами
 - [x] Кнопка «погасить долг»
 
-### Фаза 8 — Полировка и деплой 🟡 (частично)
+### Фаза 8 — Полировка и деплой 🟡 (почти всё)
 - [x] Адаптация под мобильный (PWA install prompt) — фазы 8.1–8.3
-- [x] Push-уведомления (Web Push) — код фронта/SW/триггеров/Edge Function
-      готов; ⏳ деплой Edge Function `send-push` и применение
-      `20260530600200_send_push_cron.sql` отложены до получения
-      Supabase Personal Access Token.
-- [ ] Деплой на Vercel/Cloudflare Pages — `vercel.json` готов, нужен
-      Vercel-аккаунт + установка env vars; не сделано.
+- [x] Push-уведомления (Web Push) — фронт/SW/триггеры/Edge Function +
+      деплой: `send-push` и `fetch-coingecko-prices` задеплоены,
+      VAPID-секреты выставлены, `20260530600200_send_push_cron.sql`
+      накатан — pg_cron каждые 5 мин дёргает send-push.
+- [ ] Деплой на Vercel/Cloudflare Pages — `vercel.json` готов; ждёт
+      ручного прохождения Hobby-онбординга на vercel.com (нужен один
+      раз, после этого CLI деплоит автономно).
 - [x] Бэкап БД (Supabase встроенный) — `npm run db:backup` + раздел в README
-- [ ] Тестирование с супругой и итерация — требует деплоя
+- [ ] Тестирование с супругой и итерация — после Vercel-деплоя
 
 ## 📋 Полный список фич (для справки)
 
