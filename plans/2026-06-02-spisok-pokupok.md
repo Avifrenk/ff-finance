@@ -57,7 +57,7 @@ UX-фильтр прежний: жена должна понять интерф�
     - `restore(id)` — `deleted_at = null` (для «отменить удаление», см. Фаза 3).
     - Подписка на realtime: `supabase.channel('shopping_items').on('postgres_changes', { event: '*', schema: 'public', table: 'shopping_items' }, reload)`. Defensive: ловим 42P01 (таблица не создана) → пустой список, как в `useTransfers`.
 
-- [ ] **Фаза 3. Страница `/shopping` + роут + навбар.**
+- [x] **Фаза 3. Страница `/shopping` + роут + навбар.**
   - `src/pages/Shopping.tsx`:
     - Заголовок «🛒 Покупки».
     - Сверху — `<input>` с placeholder «Добавить позицию...» + кнопка ➕. Enter тоже добавляет. После добавления — фокус остаётся в поле, оно очищается.

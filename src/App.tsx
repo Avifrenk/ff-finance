@@ -9,6 +9,7 @@ import { Invite } from './pages/Invite'
 import { Onboarding } from './pages/Onboarding'
 import { Dashboard } from './pages/Dashboard'
 import { Operations } from './pages/Operations'
+import { Shopping } from './pages/Shopping'
 import { Goals } from './pages/Goals'
 import { Crypto } from './pages/Crypto'
 import { CryptoTax } from './pages/CryptoTax'
@@ -30,6 +31,7 @@ function App() {
             <Route element={<AppLayout />}>
               <Route index element={<Dashboard />} />
               <Route path="operations" element={<Operations />} />
+              <Route path="shopping" element={<Shopping />} />
               <Route path="goals" element={<Goals />} />
               <Route path="crypto" element={<Crypto />} />
               <Route path="crypto/tax" element={<CryptoTax />} />
