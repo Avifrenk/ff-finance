@@ -21,7 +21,7 @@ UX-фильтр прежний: жена должна понять интерф�
 
 ## Фазы
 
-- [ ] **Фаза 1. Миграция: таблица `shopping_items` + RLS + realtime publication.**
+- [x] **Фаза 1. Миграция: таблица `shopping_items` + RLS + realtime publication.**
   - Миграция `supabase/migrations/20260602100000_shopping_items.sql`:
     - `create table public.shopping_items` со столбцами:
       - `id uuid primary key default gen_random_uuid()`
@@ -45,7 +45,7 @@ UX-фильтр прежний: жена должна понять интерф�
   - Применить: `npm run db:push`.
   - `src/types/database.ts`: добавить тип `shopping_items` (Row/Insert/Update).
 
-- [ ] **Фаза 2. Хук `useShoppingList`.**
+- [x] **Фаза 2. Хук `useShoppingList`.**
   - `src/hooks/useShoppingList.ts`:
     - Возвращает `{ pending, doneToday, loading, add, addBatch, toggle, remove, restore }`.
     - `pending` — `deleted_at is null && checked_at is null`, sorted by `created_at desc`.
