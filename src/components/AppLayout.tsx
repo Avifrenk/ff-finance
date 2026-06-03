@@ -40,6 +40,7 @@ export function AppLayout() {
           <nav className="ml-auto hidden md:flex items-center gap-1 text-sm">
             <NavItem to="/" icon="📊" label="Дашборд" />
             <NavItem to="/operations" icon="📝" label="Операции" />
+            <NavItem to="/shopping" icon="🛒" label="Покупки" />
             <NavItem to="/goals" icon="🎯" label="Цели" />
             <NavItem to="/crypto" icon="🪙" label="Крипта" />
             <NavItem to="/debts" icon="🤝" label="Долги" />
@@ -76,9 +77,10 @@ export function AppLayout() {
         className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
-        <div className="grid grid-cols-6 gap-0.5 px-1 py-1.5">
+        <div className="grid grid-cols-7 gap-0.5 px-1 py-1.5">
           <TabItem to="/" icon="📊" label="Дашборд" />
           <TabItem to="/operations" icon="📝" label="Операции" />
+          <TabItem to="/shopping" icon="🛒" label="Покупки" />
           <TabItem to="/goals" icon="🎯" label="Цели" />
           <TabItem to="/crypto" icon="🪙" label="Крипта" />
           <TabItem to="/debts" icon="🤝" label="Долги" />

@@ -14,6 +14,7 @@ import { MonthCompareCards } from '../components/MonthCompareCards'
 import { CategoryBreakdown } from '../components/CategoryBreakdown'
 import { BudgetsProgress } from '../components/BudgetsProgress'
 import { PaymentsCalendar } from '../components/PaymentsCalendar'
+import { ShoppingBadge } from '../components/ShoppingBadge'
 import { SafetyCushion } from '../components/SafetyCushion'
 import { CryptoPortfolioWidget } from '../components/CryptoPortfolioWidget'
 import { DebtsSummary } from '../components/DebtsSummary'
@@ -368,6 +369,8 @@ export function Dashboard() {
         accountById={fullAccountById}
         categoryById={categoryById}
       />
+
+      <ShoppingBadge />
 
       {isOwner && !partnerJoined && <InviteSection />}
     </div>

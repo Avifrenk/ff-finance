@@ -663,6 +663,39 @@ export type Database = {
         }
         Relationships: []
       }
+      shopping_items: {
+        Row: {
+          id: string
+          household_id: string
+          title: string
+          added_by: string
+          checked_at: string | null
+          checked_by: string | null
+          deleted_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          household_id: string
+          title: string
+          added_by: string
+          checked_at?: string | null
+          checked_by?: string | null
+          deleted_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          household_id?: string
+          title?: string
+          added_by?: string
+          checked_at?: string | null
+          checked_by?: string | null
+          deleted_at?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: {
