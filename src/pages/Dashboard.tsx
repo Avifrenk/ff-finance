@@ -94,25 +94,46 @@ export function Dashboard() {
     return map
   }, [accounts, allOperations, accountById])
 
-  // Общий баланс в base_currency (всё время).
-  const { totalBalance, missingRate: missingBalanceRate } = useMemo(() => {
-    let sum = 0
+  // Балансы в base_currency, разделённые по роли: кошелёк-накопления vs бюджет месяца.
+  const { walletBalance, envelopeBalance, envelopeLimit, missingRate: missingBalanceRate } = useMemo(() => {
+    let wallet = 0
+    let envelope = 0
+    let limit = 0
     let missing = false
     for (const a of accounts) {
       const raw = balanceByAccount.get(a.id) ?? 0
-      if (a.currency === baseCurrency) {
-        sum += raw
-        continue
+      const toBase = (val: number) => {
+        if (a.currency === baseCurrency) return val
+        const conv = convertMoney(val, a.currency, baseCurrency, ratesByDate)
+        if (conv === null) {
+          missing = true
+          return null
+        }
+        return conv
       }
-      const conv = convertMoney(raw, a.currency, baseCurrency, ratesByDate)
-      if (conv === null) {
-        missing = true
-        continue
+      const convertedBalance = toBase(raw)
+      if (convertedBalance === null) continue
+      if (a.role === 'monthly_budget') {
+        envelope += convertedBalance
+        if (a.monthly_amount !== null) {
+          const convertedLimit = toBase(Number(a.monthly_amount))
+          if (convertedLimit !== null) limit += convertedLimit
+        }
+      } else {
+        wallet += convertedBalance
       }
-      sum += conv
     }
-    return { totalBalance: sum, missingRate: missing }
+    return {
+      walletBalance: wallet,
+      envelopeBalance: envelope,
+      envelopeLimit: limit,
+      missingRate: missing,
+    }
   }, [accounts, balanceByAccount, baseCurrency, ratesByDate])
+
+  const totalBalance = walletBalance + envelopeBalance
+  const hasEnvelope = accounts.some((a) => a.role === 'monthly_budget')
+  const hasWallet = accounts.some((a) => a.role !== 'monthly_budget')
 
   // Итоги текущего и прошлого периода.
   const currentTotals = useMemo(
@@ -251,15 +272,65 @@ export function Dashboard() {
         </h1>
       </header>
 
-      <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-5">
-        <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          Общий баланс
-        </div>
-        <div className="text-3xl font-semibold mt-1 text-slate-900 dark:text-slate-100">
-          {formatMoney(totalBalance, baseCurrency)}
-        </div>
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-5 space-y-4">
+        {hasEnvelope && (
+          <div>
+            <div className="flex items-center justify-between">
+              <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                💰 Бюджет месяца
+              </div>
+              {envelopeLimit > 0 && (
+                <div className="text-xs tabular-nums text-slate-500 dark:text-slate-400">
+                  {formatMoney(envelopeBalance, baseCurrency, 0)} / {formatMoney(envelopeLimit, baseCurrency, 0)}
+                </div>
+              )}
+            </div>
+            <div className="text-2xl font-semibold mt-1 text-slate-900 dark:text-slate-100">
+              {formatMoney(envelopeBalance, baseCurrency)}
+            </div>
+            {envelopeLimit > 0 && (
+              <div className="h-2 mt-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${Math.max(0, Math.min(1, envelopeBalance / envelopeLimit)) * 100}%`,
+                    backgroundColor:
+                      envelopeBalance / envelopeLimit < 0.2
+                        ? '#ef4444'
+                        : envelopeBalance / envelopeLimit < 0.5
+                          ? '#f59e0b'
+                          : '#6366f1',
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {hasWallet && (
+          <div>
+            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              🏦 {hasEnvelope ? 'Накопления' : 'Общий баланс'}
+            </div>
+            <div className={`${hasEnvelope ? 'text-2xl' : 'text-3xl'} font-semibold mt-1 text-slate-900 dark:text-slate-100`}>
+              {formatMoney(walletBalance, baseCurrency)}
+            </div>
+          </div>
+        )}
+
+        {hasEnvelope && hasWallet && (
+          <div className="pt-3 border-t border-slate-200 dark:border-slate-700 flex items-baseline justify-between">
+            <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Итого
+            </span>
+            <span className="text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+              {formatMoney(totalBalance, baseCurrency)}
+            </span>
+          </div>
+        )}
+
         {missingBalanceRate && (
-          <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+          <div className="text-xs text-amber-600 dark:text-amber-400">
             Некоторые счета не учтены — нет курса
           </div>
         )}
@@ -349,11 +420,13 @@ export function Dashboard() {
             <li key={a.id} className="py-3 flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-medium text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  <span>{a.visibility === 'shared' ? '🏠' : '🧍'}</span>
+                  <span>{a.role === 'monthly_budget' ? '💰' : a.visibility === 'shared' ? '🏠' : '🧍'}</span>
                   <span>{a.name}</span>
                 </div>
                 <div className="text-xs text-slate-500 dark:text-slate-400">
-                  {a.visibility === 'shared' ? 'Семейный' : 'Личный'}
+                  {a.role === 'monthly_budget'
+                    ? `Бюджет месяца · лимит ${formatMoney(a.monthly_amount ?? 0, a.currency, 0)}`
+                    : a.visibility === 'shared' ? 'Семейный' : 'Личный'}
                 </div>
               </div>
               <div className="text-sm font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">

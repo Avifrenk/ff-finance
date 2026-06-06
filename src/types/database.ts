@@ -162,6 +162,8 @@ export type Database = {
           currency: string
           visibility: 'personal' | 'shared'
           initial_balance: number
+          role: 'wallet' | 'monthly_budget'
+          monthly_amount: number | null
           created_at: string
         }
         Insert: {
@@ -172,6 +174,8 @@ export type Database = {
           currency?: string
           visibility: 'personal' | 'shared'
           initial_balance?: number
+          role?: 'wallet' | 'monthly_budget'
+          monthly_amount?: number | null
           created_at?: string
         }
         Update: {
@@ -182,6 +186,8 @@ export type Database = {
           currency?: string
           visibility?: 'personal' | 'shared'
           initial_balance?: number
+          role?: 'wallet' | 'monthly_budget'
+          monthly_amount?: number | null
           created_at?: string
         }
         Relationships: []
@@ -196,6 +202,7 @@ export type Database = {
           color: string | null
           is_default: boolean
           is_essential: boolean
+          parent_id: string | null
           created_at: string
         }
         Insert: {
@@ -207,6 +214,7 @@ export type Database = {
           color?: string | null
           is_default?: boolean
           is_essential?: boolean
+          parent_id?: string | null
           created_at?: string
         }
         Update: {
@@ -218,6 +226,7 @@ export type Database = {
           color?: string | null
           is_default?: boolean
           is_essential?: boolean
+          parent_id?: string | null
           created_at?: string
         }
         Relationships: []
@@ -692,6 +701,87 @@ export type Database = {
           checked_at?: string | null
           checked_by?: string | null
           deleted_at?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      ai_receipt_scans: {
+        Row: {
+          id: string
+          household_id: string
+          author_profile_id: string
+          storage_path: string
+          status: 'pending' | 'parsed' | 'failed' | 'applied'
+          parsed_json: Record<string, unknown> | null
+          applied_operation_id: string | null
+          tokens_in: number | null
+          tokens_out: number | null
+          cost_usd: number | null
+          error_message: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          household_id: string
+          author_profile_id: string
+          storage_path: string
+          status: 'pending' | 'parsed' | 'failed' | 'applied'
+          parsed_json?: Record<string, unknown> | null
+          applied_operation_id?: string | null
+          tokens_in?: number | null
+          tokens_out?: number | null
+          cost_usd?: number | null
+          error_message?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          household_id?: string
+          author_profile_id?: string
+          storage_path?: string
+          status?: 'pending' | 'parsed' | 'failed' | 'applied'
+          parsed_json?: Record<string, unknown> | null
+          applied_operation_id?: string | null
+          tokens_in?: number | null
+          tokens_out?: number | null
+          cost_usd?: number | null
+          error_message?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ai_chat_messages: {
+        Row: {
+          id: string
+          profile_id: string
+          household_id: string
+          role: 'user' | 'assistant'
+          content: string
+          tokens_in: number | null
+          tokens_out: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          profile_id: string
+          household_id: string
+          role: 'user' | 'assistant'
+          content: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          profile_id?: string
+          household_id?: string
+          role?: 'user' | 'assistant'
+          content?: string
+          tokens_in?: number | null
+          tokens_out?: number | null
           created_at?: string
         }
         Relationships: []

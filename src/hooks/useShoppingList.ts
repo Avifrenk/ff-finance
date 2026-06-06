@@ -107,6 +107,13 @@ export function useShoppingList() {
       .sort((a, b) => (a.checked_at! < b.checked_at! ? 1 : -1))
   }, [items])
 
+  const history = useMemo(() => {
+    const startIso = startOfLocalDayIso()
+    return items
+      .filter((i) => i.checked_at !== null && i.checked_at < startIso)
+      .sort((a, b) => (a.checked_at! < b.checked_at! ? 1 : -1))
+  }, [items])
+
   const notify = () => window.dispatchEvent(new CustomEvent('ff:shopping-changed'))
 
   const add = useCallback(
@@ -195,6 +202,7 @@ export function useShoppingList() {
     items,
     pending,
     doneToday,
+    history,
     loading,
     error,
     reload: load,

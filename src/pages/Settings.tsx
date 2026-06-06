@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../contexts/useApp'
-import { useAccounts, type Account } from '../hooks/useAccounts'
-import { useCategories } from '../hooks/useCategories'
+import { useAccounts, type Account, type AccountRole } from '../hooks/useAccounts'
+import { useCategories, type Category } from '../hooks/useCategories'
 import { useSchedules, describeCadence, type Schedule } from '../hooks/useSchedules'
 import { useCurrencies, type Currency } from '../hooks/useCurrencies'
 import { monthKey, useBudgets } from '../hooks/useBudgets'
@@ -33,9 +33,9 @@ export function Settings() {
 
       <AccountsSection />
 
-      <EssentialCategoriesSection />
+      <CategoriesSection />
 
-      <BudgetsSection />
+      <EssentialCategoriesSection />
 
       <SchedulesSection />
 
@@ -114,6 +114,536 @@ function BaseCurrencySection() {
   )
 }
 
+function CategoriesSection() {
+  const { household } = useApp()
+  const {
+    categories,
+    loading: catLoading,
+    error: catError,
+    createCategory,
+    renameCategory,
+    deleteCategory,
+  } = useCategories()
+  const [kind, setKind] = useState<'expense' | 'income'>('expense')
+  const [month, setMonth] = useState(() => monthKey(new Date()))
+  const {
+    budgets,
+    loading: budLoading,
+    error: budError,
+    upsert,
+    remove,
+    copyFromPreviousMonth,
+  } = useBudgets(month)
+
+  const [addingParentId, setAddingParentId] = useState<string | null | undefined>(undefined)
+  // undefined — ничего не добавляем; null — добавляем root-категорию; uuid — подкатегория к этому id.
+  const [newName, setNewName] = useState('')
+  const [newIcon, setNewIcon] = useState('')
+  const [addBusy, setAddBusy] = useState(false)
+  const [addError, setAddError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [copyInfo, setCopyInfo] = useState<string | null>(null)
+  const [copyErr, setCopyErr] = useState<string | null>(null)
+
+  const baseCurrency = household?.base_currency ?? 'ILS'
+
+  const tree = useMemo(() => {
+    const ofKind = categories.filter((c) => c.kind === kind)
+    const parents = ofKind
+      .filter((c) => !c.parent_id)
+      .sort((a, b) => a.name.localeCompare(b.name))
+    const childrenByParent = new Map<string, Category[]>()
+    for (const c of ofKind) {
+      if (!c.parent_id) continue
+      const arr = childrenByParent.get(c.parent_id) ?? []
+      arr.push(c)
+      childrenByParent.set(c.parent_id, arr)
+    }
+    for (const arr of childrenByParent.values()) {
+      arr.sort((a, b) => a.name.localeCompare(b.name))
+    }
+    return { parents, childrenByParent }
+  }, [categories, kind])
+
+  const budgetByCategory = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const b of budgets) map.set(b.category_id, Number(b.amount))
+    return map
+  }, [budgets])
+
+  const totalBudget = useMemo(() => {
+    if (kind !== 'expense') return 0
+    let sum = 0
+    for (const c of categories) {
+      if (c.kind === 'expense') sum += budgetByCategory.get(c.id) ?? 0
+    }
+    return sum
+  }, [categories, budgetByCategory, kind])
+
+  function shiftMonth(delta: number) {
+    const [y, m] = month.split('-').map(Number)
+    const d = new Date(y, m - 1 + delta, 1)
+    setMonth(monthKey(d))
+  }
+
+  async function handleCopy() {
+    setCopyErr(null)
+    setCopyInfo(null)
+    try {
+      const n = await copyFromPreviousMonth()
+      setCopyInfo(n === 0 ? 'Нечего копировать' : `Скопировано: ${n}`)
+      setTimeout(() => setCopyInfo(null), 2000)
+    } catch (e) {
+      setCopyErr(e instanceof Error ? e.message : 'Ошибка')
+    }
+  }
+
+  async function handleCreate(e: FormEvent) {
+    e.preventDefault()
+    setAddError(null)
+    if (!newName.trim()) {
+      setAddError('Введите название')
+      return
+    }
+    setAddBusy(true)
+    try {
+      await createCategory({
+        name: newName,
+        kind,
+        icon: newIcon.trim() || null,
+        parent_id: addingParentId ?? null,
+      })
+      setNewName('')
+      setNewIcon('')
+      setAddingParentId(undefined)
+    } catch (e) {
+      setAddError(e instanceof Error ? e.message : 'Не удалось создать')
+    } finally {
+      setAddBusy(false)
+    }
+  }
+
+  async function handleDelete(c: Category) {
+    const children = tree.childrenByParent.get(c.id) ?? []
+    const msg =
+      children.length > 0
+        ? `Удалить «${c.name}» и ${children.length} подкатегорий? Привязанные операции останутся, но без категории.`
+        : `Удалить «${c.name}»? Привязанные операции останутся, но без категории.`
+    if (!window.confirm(msg)) return
+    setActionError(null)
+    try {
+      await deleteCategory(c.id)
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Не удалось удалить')
+    }
+  }
+
+  return (
+    <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-5">
+      <h2 className="font-semibold text-slate-900 dark:text-slate-100 mb-1">Категории</h2>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+        Свой список расходов и доходов. Для расходных категорий справа задайте
+        месячный бюджет (необязательно) — дашборд подсветит превышение.
+      </p>
+
+      <div className="grid grid-cols-2 gap-2 p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 mb-3">
+        <button
+          type="button"
+          onClick={() => setKind('expense')}
+          className={`py-1.5 text-sm font-medium rounded-md ${
+            kind === 'expense'
+              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
+              : 'text-slate-500'
+          }`}
+        >
+          💸 Расходы
+        </button>
+        <button
+          type="button"
+          onClick={() => setKind('income')}
+          className={`py-1.5 text-sm font-medium rounded-md ${
+            kind === 'income'
+              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
+              : 'text-slate-500'
+          }`}
+        >
+          💰 Доходы
+        </button>
+      </div>
+
+      {kind === 'expense' && (
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => shiftMonth(-1)}
+              className="px-2 py-1 text-sm rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+              aria-label="Предыдущий месяц"
+            >
+              ‹
+            </button>
+            <div className="text-sm font-medium text-slate-900 dark:text-slate-100 tabular-nums min-w-[8rem] text-center">
+              Бюджет · {humanMonth(month)}
+            </div>
+            <button
+              onClick={() => shiftMonth(1)}
+              className="px-2 py-1 text-sm rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+              aria-label="Следующий месяц"
+            >
+              ›
+            </button>
+          </div>
+          <button
+            onClick={handleCopy}
+            className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+            title="Скопировать значения из прошлого месяца (не трогая уже заданные)"
+          >
+            Копировать с прошлого
+          </button>
+        </div>
+      )}
+
+      {copyInfo && <p className="text-xs text-emerald-600 dark:text-emerald-400 mb-2">{copyInfo}</p>}
+      {copyErr && <ErrorBox>{copyErr}</ErrorBox>}
+      {(catLoading || (kind === 'expense' && budLoading)) && (
+        <p className="text-sm text-slate-500">Загрузка…</p>
+      )}
+      {catError && <ErrorBox>{catError}</ErrorBox>}
+      {kind === 'expense' && budError && <ErrorBox>{budError}</ErrorBox>}
+      {actionError && <ErrorBox>{actionError}</ErrorBox>}
+
+      {!catLoading && tree.parents.length === 0 && addingParentId === undefined && (
+        <p className="text-sm text-slate-500 dark:text-slate-400 my-3">
+          Пока нет категорий. Нажмите «+ Добавить категорию» ниже.
+        </p>
+      )}
+
+      {tree.parents.length > 0 && (
+        <ul className="divide-y divide-slate-200 dark:divide-slate-700 -my-2">
+          {tree.parents.map((p) => {
+            const kids = tree.childrenByParent.get(p.id) ?? []
+            const kidsSum = kids.reduce(
+              (acc, k) => acc + (budgetByCategory.get(k.id) ?? 0),
+              0,
+            )
+            return (
+              <div key={p.id}>
+                <CategoryRow
+                  category={p}
+                  depth={0}
+                  showBudget={kind === 'expense'}
+                  currentAmount={budgetByCategory.get(p.id) ?? null}
+                  childrenSum={kind === 'expense' && kids.length > 0 ? kidsSum : null}
+                  baseCurrency={baseCurrency}
+                  onSaveBudget={(amount) => upsert(p.id, amount)}
+                  onClearBudget={() => remove(p.id)}
+                  onRename={(name, icon) => renameCategory(p.id, { name, icon })}
+                  onDelete={() => handleDelete(p)}
+                  onAddSubcategory={() => {
+                    setAddingParentId(p.id)
+                    setNewName('')
+                    setNewIcon('')
+                    setAddError(null)
+                  }}
+                />
+                {kids.map((k) => (
+                  <CategoryRow
+                    key={k.id}
+                    category={k}
+                    depth={1}
+                    showBudget={kind === 'expense'}
+                    currentAmount={budgetByCategory.get(k.id) ?? null}
+                    childrenSum={null}
+                    baseCurrency={baseCurrency}
+                    onSaveBudget={(amount) => upsert(k.id, amount)}
+                    onClearBudget={() => remove(k.id)}
+                    onRename={(name, icon) => renameCategory(k.id, { name, icon })}
+                    onDelete={() => handleDelete(k)}
+                    onAddSubcategory={null}
+                  />
+                ))}
+              </div>
+            )
+          })}
+        </ul>
+      )}
+
+      {kind === 'expense' && tree.parents.length > 0 && (
+        <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between text-sm">
+          <span className="font-medium text-slate-900 dark:text-slate-100">Итого бюджет</span>
+          <span className="tabular-nums font-semibold text-slate-900 dark:text-slate-100">
+            {formatMoney(totalBudget, baseCurrency, 0)}
+          </span>
+        </div>
+      )}
+
+      {addingParentId !== undefined ? (
+        <form
+          onSubmit={handleCreate}
+          className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 space-y-2"
+        >
+          <div className="text-xs text-slate-500 dark:text-slate-400">
+            {addingParentId === null
+              ? `Новая ${kind === 'expense' ? 'категория расходов' : 'категория доходов'}`
+              : `Подкатегория к «${categories.find((c) => c.id === addingParentId)?.name ?? ''}»`}
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="🏷"
+              value={newIcon}
+              onChange={(e) => setNewIcon(e.target.value)}
+              maxLength={2}
+              className="w-12 text-center px-2 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+            />
+            <input
+              type="text"
+              placeholder="Название"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              autoFocus
+              className="flex-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+            />
+          </div>
+          {addError && <ErrorBox>{addError}</ErrorBox>}
+          <div className="flex gap-2">
+            <SecondaryButton type="button" onClick={() => setAddingParentId(undefined)}>
+              Отмена
+            </SecondaryButton>
+            <PrimaryButton type="submit" disabled={addBusy || !newName.trim()}>
+              {addBusy ? 'Создаём…' : 'Создать'}
+            </PrimaryButton>
+          </div>
+        </form>
+      ) : (
+        <button
+          onClick={() => {
+            setAddingParentId(null)
+            setNewName('')
+            setNewIcon('')
+            setAddError(null)
+          }}
+          className="mt-4 w-full py-2.5 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-600 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+        >
+          + Добавить категорию
+        </button>
+      )}
+    </section>
+  )
+}
+
+function CategoryRow({
+  category,
+  depth,
+  showBudget,
+  currentAmount,
+  childrenSum,
+  baseCurrency,
+  onSaveBudget,
+  onClearBudget,
+  onRename,
+  onDelete,
+  onAddSubcategory,
+}: {
+  category: Category
+  depth: 0 | 1
+  showBudget: boolean
+  currentAmount: number | null
+  childrenSum: number | null
+  baseCurrency: string
+  onSaveBudget: (amount: number) => Promise<unknown>
+  onClearBudget: () => Promise<unknown>
+  onRename: (name: string, icon: string | null) => Promise<unknown>
+  onDelete: () => void
+  onAddSubcategory: (() => void) | null
+}) {
+  const [editing, setEditing] = useState(false)
+  const [editName, setEditName] = useState(category.name)
+  const [editIcon, setEditIcon] = useState(category.icon ?? '')
+  const [editBusy, setEditBusy] = useState(false)
+
+  const [budgetValue, setBudgetValue] = useState(
+    currentAmount !== null ? String(currentAmount) : '',
+  )
+  const [budgetSaving, setBudgetSaving] = useState(false)
+  const [rowError, setRowError] = useState<string | null>(null)
+
+  /* eslint-disable react-hooks/set-state-in-effect --
+     Внешний источник истины (currentAmount из props) — перенакатываем
+     локальное значение при смене месяца / удалённом upsert. */
+  useEffect(() => {
+    setBudgetValue(currentAmount !== null ? String(currentAmount) : '')
+  }, [currentAmount])
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  async function commitEdit() {
+    if (!editName.trim()) {
+      setEditing(false)
+      setEditName(category.name)
+      setEditIcon(category.icon ?? '')
+      return
+    }
+    if (editName === category.name && (editIcon || null) === (category.icon ?? null)) {
+      setEditing(false)
+      return
+    }
+    setEditBusy(true)
+    try {
+      await onRename(editName, editIcon.trim() || null)
+      setEditing(false)
+    } finally {
+      setEditBusy(false)
+    }
+  }
+
+  async function commitBudget() {
+    setRowError(null)
+    const trimmed = budgetValue.trim().replace(',', '.')
+    if (trimmed === '') {
+      if (currentAmount === null) return
+      setBudgetSaving(true)
+      try {
+        await onClearBudget()
+      } catch (e) {
+        setRowError(e instanceof Error ? e.message : 'Ошибка')
+      } finally {
+        setBudgetSaving(false)
+      }
+      return
+    }
+    const num = Number(trimmed)
+    if (!isFinite(num) || num <= 0) {
+      setRowError('Положительное число')
+      return
+    }
+    if (num === currentAmount) return
+    setBudgetSaving(true)
+    try {
+      await onSaveBudget(num)
+    } catch (e) {
+      setRowError(e instanceof Error ? e.message : 'Ошибка')
+    } finally {
+      setBudgetSaving(false)
+    }
+  }
+
+  return (
+    <li className={`py-2 flex items-center gap-2 ${depth === 1 ? 'pl-8' : ''}`}>
+      {editing ? (
+        <>
+          <input
+            type="text"
+            value={editIcon}
+            onChange={(e) => setEditIcon(e.target.value)}
+            maxLength={2}
+            className="w-10 text-center px-1 py-1 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+          />
+          <input
+            type="text"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitEdit()
+              if (e.key === 'Escape') {
+                setEditing(false)
+                setEditName(category.name)
+                setEditIcon(category.icon ?? '')
+              }
+            }}
+            autoFocus
+            className="flex-1 px-2 py-1 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+          />
+          <button
+            onClick={commitEdit}
+            disabled={editBusy}
+            className="px-2 py-1 text-xs rounded-md text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
+            title="Сохранить"
+            aria-label="Сохранить"
+          >
+            ✓
+          </button>
+          <button
+            onClick={() => {
+              setEditing(false)
+              setEditName(category.name)
+              setEditIcon(category.icon ?? '')
+            }}
+            className="px-2 py-1 text-xs rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+            title="Отмена"
+            aria-label="Отмена"
+          >
+            ✕
+          </button>
+        </>
+      ) : (
+        <>
+          <span className="text-base shrink-0 w-6 text-center">{category.icon ?? '•'}</span>
+          <span
+            className={`flex-1 min-w-0 truncate text-sm text-slate-900 dark:text-slate-100 ${
+              depth === 0 ? 'font-medium' : ''
+            }`}
+          >
+            {category.name}
+            {childrenSum !== null && childrenSum > 0 && (
+              <span className="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400 tabular-nums">
+                ∑ листов {formatMoney(childrenSum, baseCurrency, 0)}
+              </span>
+            )}
+          </span>
+          {showBudget && (
+            <div className="flex items-center gap-1 shrink-0">
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="0"
+                value={budgetValue}
+                onChange={(e) => setBudgetValue(e.target.value)}
+                onBlur={commitBudget}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                }}
+                disabled={budgetSaving}
+                className="w-20 text-right tabular-nums px-2 py-1 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500"
+              />
+              <span className="text-xs text-slate-500 dark:text-slate-400 w-4">
+                {currencySymbol(baseCurrency)}
+              </span>
+            </div>
+          )}
+          <div className="flex items-center gap-0.5 shrink-0 ml-1">
+            {onAddSubcategory && (
+              <button
+                onClick={onAddSubcategory}
+                className="p-1.5 text-base text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
+                title="Добавить подкатегорию"
+                aria-label="Добавить подкатегорию"
+              >
+                ➕
+              </button>
+            )}
+            <button
+              onClick={() => setEditing(true)}
+              className="p-1.5 text-base text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
+              title="Переименовать"
+              aria-label="Переименовать"
+            >
+              ✏️
+            </button>
+            <button
+              onClick={onDelete}
+              className="p-1.5 text-base text-rose-500 hover:text-rose-700 dark:hover:text-rose-300 rounded-md hover:bg-rose-50 dark:hover:bg-rose-900/20"
+              title="Удалить"
+              aria-label="Удалить"
+            >
+              🗑
+            </button>
+          </div>
+          {rowError && <span className="text-xs text-rose-500 ml-2">{rowError}</span>}
+        </>
+      )}
+    </li>
+  )
+}
+
 function EssentialCategoriesSection() {
   const { categories, loading, setEssential } = useCategories()
   const [savingId, setSavingId] = useState<string | null>(null)
@@ -179,198 +709,6 @@ function EssentialCategoriesSection() {
         </ul>
       )}
     </section>
-  )
-}
-
-function BudgetsSection() {
-  const { household } = useApp()
-  const { categories } = useCategories()
-  const [month, setMonth] = useState(() => monthKey(new Date()))
-  const { budgets, loading, error, upsert, remove, copyFromPreviousMonth } = useBudgets(month)
-  const [copyInfo, setCopyInfo] = useState<string | null>(null)
-  const [copyErr, setCopyErr] = useState<string | null>(null)
-
-  const baseCurrency = household?.base_currency ?? 'ILS'
-  const expenseCategories = useMemo(
-    () => categories.filter((c) => c.kind === 'expense'),
-    [categories],
-  )
-  const budgetByCategory = useMemo(() => {
-    const map = new Map<string, number>()
-    for (const b of budgets) map.set(b.category_id, Number(b.amount))
-    return map
-  }, [budgets])
-
-  function shiftMonth(delta: number) {
-    const [y, m] = month.split('-').map(Number)
-    const d = new Date(y, m - 1 + delta, 1)
-    setMonth(monthKey(d))
-  }
-
-  async function handleCopy() {
-    setCopyErr(null)
-    setCopyInfo(null)
-    try {
-      const n = await copyFromPreviousMonth()
-      setCopyInfo(n === 0 ? 'Нечего копировать' : `Скопировано: ${n}`)
-      setTimeout(() => setCopyInfo(null), 2000)
-    } catch (e) {
-      setCopyErr(e instanceof Error ? e.message : 'Ошибка')
-    }
-  }
-
-  return (
-    <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-5">
-      <div className="flex items-center justify-between mb-1">
-        <h2 className="font-semibold text-slate-900 dark:text-slate-100">Бюджеты на месяц</h2>
-        <button
-          onClick={handleCopy}
-          className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
-          title="Скопировать значения из прошлого месяца (не трогая уже заданные)"
-        >
-          Скопировать с прошлого
-        </button>
-      </div>
-      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-        Потолок расходов на категорию. Сумма в {currencySymbol(baseCurrency)} {baseCurrency} (валюта
-        семьи). Дашборд покажет прогресс и подсветит превышение.
-      </p>
-
-      <div className="flex items-center gap-3 mb-3">
-        <button
-          onClick={() => shiftMonth(-1)}
-          className="px-2 py-1 text-sm rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
-          aria-label="Предыдущий месяц"
-        >
-          ‹
-        </button>
-        <div className="text-sm font-medium text-slate-900 dark:text-slate-100 tabular-nums">
-          {humanMonth(month)}
-        </div>
-        <button
-          onClick={() => shiftMonth(1)}
-          className="px-2 py-1 text-sm rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
-          aria-label="Следующий месяц"
-        >
-          ›
-        </button>
-      </div>
-
-      {copyInfo && <p className="text-xs text-emerald-600 dark:text-emerald-400 mb-2">{copyInfo}</p>}
-      {copyErr && <ErrorBox>{copyErr}</ErrorBox>}
-
-      {loading && <p className="text-sm text-slate-500">Загрузка…</p>}
-      {error && <ErrorBox>{error}</ErrorBox>}
-
-      {!loading && expenseCategories.length === 0 && (
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Сначала создайте категории расходов — пока бюджет задавать некуда.
-        </p>
-      )}
-
-      {expenseCategories.length > 0 && (
-        <ul className="divide-y divide-slate-200 dark:divide-slate-700 -my-2">
-          {expenseCategories.map((c) => (
-            <BudgetRow
-              key={c.id}
-              icon={c.icon}
-              name={c.name}
-              currentAmount={budgetByCategory.get(c.id) ?? null}
-              baseCurrency={baseCurrency}
-              onSave={(amount) => upsert(c.id, amount)}
-              onClear={() => remove(c.id)}
-            />
-          ))}
-        </ul>
-      )}
-    </section>
-  )
-}
-
-function BudgetRow({
-  icon,
-  name,
-  currentAmount,
-  baseCurrency,
-  onSave,
-  onClear,
-}: {
-  icon: string | null
-  name: string
-  currentAmount: number | null
-  baseCurrency: string
-  onSave: (amount: number) => Promise<unknown>
-  onClear: () => Promise<unknown>
-}) {
-  const [value, setValue] = useState(currentAmount !== null ? String(currentAmount) : '')
-  const [saving, setSaving] = useState(false)
-  const [rowError, setRowError] = useState<string | null>(null)
-
-  /* eslint-disable react-hooks/set-state-in-effect --
-     Внешний источник истины (currentAmount из props) — перенакатываем
-     локальное значение при смене месяца / удалённом upsert. */
-  useEffect(() => {
-    setValue(currentAmount !== null ? String(currentAmount) : '')
-  }, [currentAmount])
-  /* eslint-enable react-hooks/set-state-in-effect */
-
-  async function commit() {
-    setRowError(null)
-    const trimmed = value.trim().replace(',', '.')
-    if (trimmed === '') {
-      if (currentAmount === null) return // нечего удалять
-      setSaving(true)
-      try {
-        await onClear()
-      } catch (e) {
-        setRowError(e instanceof Error ? e.message : 'Ошибка')
-      } finally {
-        setSaving(false)
-      }
-      return
-    }
-    const num = Number(trimmed)
-    if (!isFinite(num) || num <= 0) {
-      setRowError('Положительное число')
-      return
-    }
-    if (num === currentAmount) return // ничего не изменилось
-    setSaving(true)
-    try {
-      await onSave(num)
-    } catch (e) {
-      setRowError(e instanceof Error ? e.message : 'Ошибка')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <li className="py-2 flex items-center gap-3">
-      <span className="text-base shrink-0 w-6 text-center">{icon ?? '•'}</span>
-      <span className="flex-1 min-w-0 truncate text-sm text-slate-900 dark:text-slate-100">
-        {name}
-      </span>
-      <div className="flex items-center gap-1 shrink-0">
-        <input
-          type="text"
-          inputMode="decimal"
-          placeholder="0"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-          }}
-          disabled={saving}
-          className="w-24 text-right tabular-nums px-2 py-1 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500"
-        />
-        <span className="text-xs text-slate-500 dark:text-slate-400 w-4">
-          {currencySymbol(baseCurrency)}
-        </span>
-      </div>
-      {rowError && <span className="text-xs text-rose-500 ml-2">{rowError}</span>}
-    </li>
   )
 }
 
@@ -795,15 +1133,16 @@ function AccountsSection() {
             <li key={a.id} className="py-3 flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-medium text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  <span>{a.visibility === 'shared' ? '🏠' : '🧍'}</span>
+                  <span>{a.role === 'monthly_budget' ? '💰' : a.visibility === 'shared' ? '🏠' : '🧍'}</span>
                   <span>{a.name}</span>
                   <span className="text-xs text-slate-500 dark:text-slate-400 font-normal">
                     {currencySymbol(a.currency)} {a.currency}
                   </span>
                 </div>
                 <div className="text-xs text-slate-500 dark:text-slate-400">
-                  {a.visibility === 'shared' ? 'Семейный' : 'Личный'} ·{' '}
-                  Начальный баланс {formatMoney(a.initial_balance, a.currency)}
+                  {a.role === 'monthly_budget'
+                    ? `Бюджет месяца · лимит ${formatMoney(a.monthly_amount ?? 0, a.currency)}`
+                    : `${a.visibility === 'shared' ? 'Семейный' : 'Личный'} · Начальный баланс ${formatMoney(a.initial_balance, a.currency)}`}
                 </div>
               </div>
               {a.owner_profile_id === profile?.id && (
@@ -844,27 +1183,44 @@ function AddAccountForm({
     visibility: 'personal' | 'shared'
     initial_balance: number
     currency: string
+    role?: AccountRole
+    monthly_amount?: number | null
   }) => Promise<unknown>
 }) {
   const { household } = useApp()
   const { currencies } = useCurrencies()
   const [name, setName] = useState('')
   const [visibility, setVisibility] = useState<'personal' | 'shared'>('personal')
+  const [role, setRole] = useState<AccountRole>('wallet')
   const [currency, setCurrency] = useState(household?.base_currency ?? 'ILS')
   const [initialBalance, setInitialBalance] = useState('0')
+  const [monthlyAmount, setMonthlyAmount] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
     setError(null)
+    if (role === 'monthly_budget') {
+      const n = Number(monthlyAmount.replace(',', '.'))
+      if (!isFinite(n) || n <= 0) {
+        setError('Месячный лимит должен быть положительным числом')
+        return
+      }
+    }
     setBusy(true)
     try {
+      const monthlyNum =
+        role === 'monthly_budget' ? Number(monthlyAmount.replace(',', '.')) : null
       await create({
         name: name.trim(),
         visibility,
         currency,
-        initial_balance: Number(initialBalance) || 0,
+        initial_balance: role === 'monthly_budget'
+          ? (monthlyNum ?? 0)
+          : (Number(initialBalance) || 0),
+        role,
+        monthly_amount: monthlyNum,
       })
       onDone()
     } catch (e) {
@@ -888,6 +1244,23 @@ function AddAccountForm({
           required
           autoFocus
         />
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Роль</label>
+        <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-100/60 dark:bg-slate-800/60">
+          <VisibilityButton active={role === 'wallet'} onClick={() => setRole('wallet')}>
+            🏦 Накопления
+          </VisibilityButton>
+          <VisibilityButton active={role === 'monthly_budget'} onClick={() => setRole('monthly_budget')}>
+            💰 Бюджет месяца
+          </VisibilityButton>
+        </div>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+          {role === 'wallet'
+            ? 'Обычный счёт: лежит то, что не потрачено. Учитывается как накопления.'
+            : 'Конверт месяца: задаёте лимит (например 3600 ₪ на личные траты), и на дашборде видно сколько ещё осталось до конца месяца.'}
+        </p>
       </div>
 
       <div>
@@ -926,18 +1299,38 @@ function AddAccountForm({
         </SelectBox>
       </div>
 
-      <div>
-        <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-          Начальный баланс
-        </label>
-        <AuthInput
-          type="number"
-          step="0.01"
-          value={initialBalance}
-          onChange={(e) => setInitialBalance(e.target.value)}
-          required
-        />
-      </div>
+      {role === 'monthly_budget' ? (
+        <div>
+          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+            Месячный лимит
+          </label>
+          <AuthInput
+            type="text"
+            inputMode="decimal"
+            placeholder="3600"
+            value={monthlyAmount}
+            onChange={(e) => setMonthlyAmount(e.target.value)}
+            required
+          />
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            Сколько вы кладёте в конверт каждый месяц. Стартовый баланс
+            конверта = лимиту.
+          </p>
+        </div>
+      ) : (
+        <div>
+          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+            Начальный баланс
+          </label>
+          <AuthInput
+            type="number"
+            step="0.01"
+            value={initialBalance}
+            onChange={(e) => setInitialBalance(e.target.value)}
+            required
+          />
+        </div>
+      )}
 
       {error && <ErrorBox>{error}</ErrorBox>}
 

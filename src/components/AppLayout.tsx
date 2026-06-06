@@ -40,6 +40,8 @@ export function AppLayout() {
           <nav className="ml-auto hidden md:flex items-center gap-1 text-sm">
             <NavItem to="/" icon="📊" label="Дашборд" />
             <NavItem to="/operations" icon="📝" label="Операции" />
+            <NavItem to="/scan" icon="📸" label="Сканер" />
+            <NavItem to="/assistant" icon="💬" label="Финик" />
             <NavItem to="/shopping" icon="🛒" label="Покупки" />
             <NavItem to="/goals" icon="🎯" label="Цели" />
             <NavItem to="/crypto" icon="🪙" label="Крипта" />
@@ -77,9 +79,13 @@ export function AppLayout() {
         className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
-        <div className="grid grid-cols-7 gap-0.5 px-1 py-1.5">
+        <div
+          className="flex gap-0.5 px-2 py-1.5 overflow-x-auto snap-x snap-mandatory scroll-px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
           <TabItem to="/" icon="📊" label="Дашборд" />
           <TabItem to="/operations" icon="📝" label="Операции" />
+          <TabItem to="/scan" icon="📸" label="Сканер" />
+          <TabItem to="/assistant" icon="💬" label="Финик" />
           <TabItem to="/shopping" icon="🛒" label="Покупки" />
           <TabItem to="/goals" icon="🎯" label="Цели" />
           <TabItem to="/crypto" icon="🪙" label="Крипта" />
@@ -108,15 +114,15 @@ function TabItem({ to, icon, label }: { to: string; icon: string; label: string 
       to={to}
       end
       className={({ isActive }) =>
-        `flex flex-col items-center justify-center gap-0.5 py-1 rounded-md transition-colors ${
+        `shrink-0 snap-start flex flex-col items-center justify-center gap-1 px-3 py-1.5 min-w-[64px] rounded-md transition-colors ${
           isActive
             ? 'text-indigo-700 dark:text-indigo-300 bg-indigo-500/10'
             : 'text-slate-500 dark:text-slate-400'
         }`
       }
     >
-      <span className="text-xl leading-none">{icon}</span>
-      <span className="text-[10px] leading-tight font-medium">{label}</span>
+      <span className="text-2xl leading-none">{icon}</span>
+      <span className="text-[11px] leading-tight font-medium whitespace-nowrap">{label}</span>
     </NavLink>
   )
 }

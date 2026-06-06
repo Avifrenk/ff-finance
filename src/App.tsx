@@ -10,6 +10,8 @@ import { Onboarding } from './pages/Onboarding'
 import { Dashboard } from './pages/Dashboard'
 import { Operations } from './pages/Operations'
 import { Shopping } from './pages/Shopping'
+import { ScanReceipt } from './pages/ScanReceipt'
+import { Assistant } from './pages/Assistant'
 import { Goals } from './pages/Goals'
 import { Crypto } from './pages/Crypto'
 import { CryptoTax } from './pages/CryptoTax'
@@ -32,6 +34,8 @@ function App() {
               <Route index element={<Dashboard />} />
               <Route path="operations" element={<Operations />} />
               <Route path="shopping" element={<Shopping />} />
+              <Route path="scan" element={<ScanReceipt />} />
+              <Route path="assistant" element={<Assistant />} />
               <Route path="goals" element={<Goals />} />
               <Route path="crypto" element={<Crypto />} />
               <Route path="crypto/tax" element={<CryptoTax />} />

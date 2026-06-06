@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useAccounts } from '../hooks/useAccounts'
 import { useCategories } from '../hooks/useCategories'
-import { useOperations, type CreateOperationInput } from '../hooks/useOperations'
+import { useOperations, type CreateOperationInput, type Operation } from '../hooks/useOperations'
 import { useTransfers } from '../hooks/useTransfers'
 import { useFxRates } from '../hooks/useFxRates'
 import { convertMoney } from '../lib/fx'
@@ -18,16 +18,19 @@ export function AddOperationDialog({
   open,
   onClose,
   onCreated,
+  editOperation,
 }: {
   open: boolean
   onClose: () => void
   onCreated?: () => void
+  editOperation?: Operation | null
 }) {
   const { accounts } = useAccounts()
   const { categories } = useCategories()
-  const { create: createOperation } = useOperations('month')
+  const { create: createOperation, update: updateOperation } = useOperations('month')
   const { create: createTransfer } = useTransfers()
   const { ratesByDate } = useFxRates()
+  const isEdit = !!editOperation
 
   const [tab, setTab] = useState<Tab>('expense')
   const [amount, setAmount] = useState('')
@@ -48,6 +51,31 @@ export function AddOperationDialog({
     () => (kind ? categories.filter((c) => c.kind === kind) : []),
     [categories, kind],
   )
+  /** Сначала parent, под ним — отсортированные подкатегории. */
+  const orderedCategories = useMemo(() => {
+    const parents = kindCategories
+      .filter((c) => !c.parent_id)
+      .sort((a, b) => a.name.localeCompare(b.name))
+    const byParent = new Map<string, typeof kindCategories>()
+    for (const c of kindCategories) {
+      if (!c.parent_id) continue
+      const arr = byParent.get(c.parent_id) ?? []
+      arr.push(c)
+      byParent.set(c.parent_id, arr)
+    }
+    const out: { id: string; label: string }[] = []
+    for (const p of parents) {
+      out.push({ id: p.id, label: `${p.icon ? p.icon + ' ' : ''}${p.name}` })
+      const kids = (byParent.get(p.id) ?? []).slice().sort((a, b) => a.name.localeCompare(b.name))
+      for (const k of kids) {
+        out.push({
+          id: k.id,
+          label: `    └ ${k.icon ? k.icon + ' ' : ''}${k.name}`,
+        })
+      }
+    }
+    return out
+  }, [kindCategories])
   const selectedAccount = visibleAccounts.find((a) => a.id === accountId)
   const toAccount = visibleAccounts.find((a) => a.id === toAccountId)
   const otherAccounts = visibleAccounts.filter((a) => a.id !== accountId)
@@ -71,9 +99,22 @@ export function AddOperationDialog({
      осмысленный, новое поведение нового react-hooks плагина к нему
      не применимо. */
 
-  // Form-reset при открытии.
+  // Form-reset при открытии. В edit-режиме — префилл из editOperation.
   useEffect(() => {
     if (!open) return
+    if (editOperation) {
+      setTab(editOperation.kind)
+      setAmount(String(editOperation.amount))
+      setToAmount('')
+      setAccountId(editOperation.account_id)
+      setToAccountId('')
+      setCategoryId(editOperation.category_id ?? '')
+      setOccurredAt(editOperation.occurred_at)
+      setNote(editOperation.note ?? '')
+      setIsPrivate(editOperation.is_private)
+      setError(null)
+      return
+    }
     setTab('expense')
     setAmount('')
     setToAmount('')
@@ -84,7 +125,7 @@ export function AddOperationDialog({
     setNote('')
     setIsPrivate(false)
     setError(null)
-  }, [open, visibleAccounts])
+  }, [open, visibleAccounts, editOperation])
 
   // Сбрасываем toAmount если выбор счетов сделал перевод не-кросс-валютным.
   useEffect(() => {
@@ -150,7 +191,17 @@ export function AddOperationDialog({
 
     setBusy(true)
     try {
-      if (tab === 'transfer') {
+      if (isEdit && editOperation) {
+        await updateOperation(editOperation.id, {
+          account_id: accountId,
+          category_id: categoryId || null,
+          kind: tab === 'transfer' ? editOperation.kind : tab,
+          amount: amountNum,
+          occurred_at: occurredAt,
+          note: note.trim() || null,
+          is_private: isPrivate,
+        })
+      } else if (tab === 'transfer') {
         await createTransfer({
           from_account_id: accountId,
           to_account_id: toAccountId,
@@ -190,7 +241,9 @@ export function AddOperationDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Новая операция</h2>
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+            {isEdit ? 'Изменить операцию' : 'Новая операция'}
+          </h2>
           <button
             onClick={onClose}
             className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 text-xl leading-none"
@@ -204,7 +257,7 @@ export function AddOperationDialog({
           <NoAccountsHint onClose={onClose} />
         ) : (
           <form onSubmit={submit} className="space-y-4">
-            <TabToggle value={tab} onChange={setTab} />
+            {!isEdit && <TabToggle value={tab} onChange={setTab} />}
 
             <div>
               <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -224,15 +277,10 @@ export function AddOperationDialog({
 
             <div>
               <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                {tab === 'transfer' ? 'Откуда' : 'Счёт'}
+                {tab === 'transfer' ? 'Откуда' : 'Откуда снять'}
               </label>
               <Select value={accountId} onChange={setAccountId}>
-                {visibleAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.visibility === 'shared' ? '🏠 ' : '🧍 '}
-                    {a.name}
-                  </option>
-                ))}
+                <AccountOptions accounts={visibleAccounts} />
               </Select>
             </div>
 
@@ -243,12 +291,7 @@ export function AddOperationDialog({
                 </label>
                 <Select value={toAccountId} onChange={setToAccountId}>
                   <option value="">— выберите счёт —</option>
-                  {otherAccounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.visibility === 'shared' ? '🏠 ' : '🧍 '}
-                      {a.name} {currencySymbol(a.currency)}
-                    </option>
-                  ))}
+                  <AccountOptions accounts={otherAccounts} withCurrency />
                 </Select>
               </div>
             )}
@@ -282,10 +325,9 @@ export function AddOperationDialog({
                 </label>
                 <Select value={categoryId} onChange={setCategoryId}>
                   <option value="">— без категории —</option>
-                  {kindCategories.map((c) => (
+                  {orderedCategories.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.icon ? `${c.icon} ` : ''}
-                      {c.name}
+                      {c.label}
                     </option>
                   ))}
                 </Select>
@@ -342,7 +384,7 @@ export function AddOperationDialog({
                 Отмена
               </SecondaryButton>
               <PrimaryButton type="submit" disabled={busy}>
-                {busy ? 'Сохраняем…' : 'Сохранить'}
+                {busy ? 'Сохраняем…' : isEdit ? 'Сохранить изменения' : 'Сохранить'}
               </PrimaryButton>
             </div>
           </form>
@@ -389,6 +431,44 @@ function TabButton({
     >
       {children}
     </button>
+  )
+}
+
+function AccountOptions({
+  accounts,
+  withCurrency,
+}: {
+  accounts: { id: string; name: string; currency: string; visibility: 'personal' | 'shared'; role: 'wallet' | 'monthly_budget' }[]
+  withCurrency?: boolean
+}) {
+  const envelopes = accounts.filter((a) => a.role === 'monthly_budget')
+  const wallets = accounts.filter((a) => a.role !== 'monthly_budget')
+  const label = (a: (typeof accounts)[number]) => {
+    const icon = a.role === 'monthly_budget' ? '💰 ' : a.visibility === 'shared' ? '🏠 ' : '🧍 '
+    const cur = withCurrency ? ` ${currencySymbol(a.currency)}` : ''
+    return `${icon}${a.name}${cur}`
+  }
+  return (
+    <>
+      {envelopes.length > 0 && (
+        <optgroup label="💰 Бюджет месяца">
+          {envelopes.map((a) => (
+            <option key={a.id} value={a.id}>
+              {label(a)}
+            </option>
+          ))}
+        </optgroup>
+      )}
+      {wallets.length > 0 && (
+        <optgroup label={envelopes.length > 0 ? '🏦 Накопления' : 'Счета'}>
+          {wallets.map((a) => (
+            <option key={a.id} value={a.id}>
+              {label(a)}
+            </option>
+          ))}
+        </optgroup>
+      )}
+    </>
   )
 }
 

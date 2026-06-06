@@ -6,11 +6,12 @@ const MAX_TITLE = 200
 
 export function Shopping() {
   const { household, members } = useApp()
-  const { pending, doneToday, loading, add, addBatch, toggle, remove, restore } =
+  const { pending, doneToday, history, loading, add, addBatch, toggle, remove, restore } =
     useShoppingList()
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [doneOpen, setDoneOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [snackbar, setSnackbar] = useState<{ id: string; title: string } | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const snackbarTimer = useRef<number | null>(null)
@@ -165,6 +166,41 @@ export function Shopping() {
         </section>
       )}
 
+      {/* История покупок */}
+      {history.length > 0 && (
+        <section className="space-y-2">
+          <button
+            onClick={() => setHistoryOpen((v) => !v)}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            <span>🗓 История покупок · {history.length}</span>
+            <span aria-hidden>{historyOpen ? '▾' : '▸'}</span>
+          </button>
+          {historyOpen && (
+            <div className="space-y-4">
+              {groupHistoryByDay(history).map(({ key, label, items }) => (
+                <div key={key} className="space-y-1.5">
+                  <h3 className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500 px-1">
+                    {label}
+                  </h3>
+                  <ul className="space-y-1.5">
+                    {items.map((item) => (
+                      <ShoppingRow
+                        key={item.id}
+                        item={item}
+                        done
+                        onToggle={() => void toggle(item.id)}
+                        onRemove={() => void handleRemove(item)}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Snackbar "удалено / отменить" */}
       {snackbar && (
         <div
@@ -182,6 +218,43 @@ export function Shopping() {
       )}
     </div>
   )
+}
+
+const DAY_LABEL_FORMATTER = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'long',
+})
+
+function dayLabel(date: Date, today: Date): string {
+  const diffDays = Math.round(
+    (today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24),
+  )
+  if (diffDays === 1) return 'Вчера'
+  if (diffDays === 2) return 'Позавчера'
+  return DAY_LABEL_FORMATTER.format(date)
+}
+
+function groupHistoryByDay(
+  items: ShoppingItem[],
+): { key: string; label: string; items: ShoppingItem[] }[] {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const groups = new Map<string, ShoppingItem[]>()
+  for (const item of items) {
+    const d = new Date(item.checked_at!)
+    d.setHours(0, 0, 0, 0)
+    const key = d.toISOString()
+    const bucket = groups.get(key)
+    if (bucket) bucket.push(item)
+    else groups.set(key, [item])
+  }
+  return Array.from(groups.entries())
+    .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+    .map(([key, items]) => ({
+      key,
+      label: dayLabel(new Date(key), today),
+      items,
+    }))
 }
 
 function ShoppingRow({

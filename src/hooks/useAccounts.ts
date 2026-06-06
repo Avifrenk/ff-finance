@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../contexts/useApp'
 
+export type AccountRole = 'wallet' | 'monthly_budget'
+
 export interface Account {
   id: string
   household_id: string
@@ -10,6 +12,8 @@ export interface Account {
   currency: string
   visibility: 'personal' | 'shared'
   initial_balance: number
+  role: AccountRole
+  monthly_amount: number | null
   created_at: string
 }
 
@@ -18,6 +22,8 @@ export interface CreateAccountInput {
   visibility: 'personal' | 'shared'
   initial_balance: number
   currency?: string
+  role?: AccountRole
+  monthly_amount?: number | null
 }
 
 export function useAccounts() {
@@ -36,7 +42,7 @@ export function useAccounts() {
     setError(null)
     const { data, error: err } = await supabase
       .from('accounts')
-      .select('id, household_id, owner_profile_id, name, currency, visibility, initial_balance, created_at')
+      .select('id, household_id, owner_profile_id, name, currency, visibility, initial_balance, role, monthly_amount, created_at')
       .eq('household_id', household.id)
       .order('created_at', { ascending: true })
     setLoading(false)
@@ -61,6 +67,7 @@ export function useAccounts() {
   const create = useCallback(
     async (input: CreateAccountInput) => {
       if (!household || !profile) throw new Error('No household')
+      const role: AccountRole = input.role ?? 'wallet'
       const { data, error: err } = await supabase
         .from('accounts')
         .insert({
@@ -70,8 +77,10 @@ export function useAccounts() {
           currency: input.currency ?? 'ILS',
           visibility: input.visibility,
           initial_balance: input.initial_balance,
+          role,
+          monthly_amount: role === 'monthly_budget' ? (input.monthly_amount ?? null) : null,
         })
-        .select('id, household_id, owner_profile_id, name, currency, visibility, initial_balance, created_at')
+        .select('id, household_id, owner_profile_id, name, currency, visibility, initial_balance, role, monthly_amount, created_at')
         .single()
       if (err) throw err
       setAccounts((prev) => [...prev, data])

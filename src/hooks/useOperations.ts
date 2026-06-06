@@ -136,5 +136,31 @@ export function useOperations(period: PeriodFilter = 'month') {
     window.dispatchEvent(new CustomEvent('ff:operations-changed'))
   }, [])
 
-  return { operations, loading, error, reload: load, create, remove }
+  const update = useCallback(
+    async (operationId: string, patch: Partial<CreateOperationInput>) => {
+      const { data, error: err } = await supabase
+        .from('operations')
+        .update({
+          ...(patch.account_id !== undefined && { account_id: patch.account_id }),
+          ...(patch.category_id !== undefined && { category_id: patch.category_id }),
+          ...(patch.kind !== undefined && { kind: patch.kind }),
+          ...(patch.amount !== undefined && { amount: patch.amount }),
+          ...(patch.occurred_at !== undefined && { occurred_at: patch.occurred_at }),
+          ...(patch.note !== undefined && { note: patch.note }),
+          ...(patch.is_private !== undefined && { is_private: patch.is_private }),
+        })
+        .eq('id', operationId)
+        .select(
+          'id, household_id, account_id, category_id, author_profile_id, kind, amount, occurred_at, note, is_private, transfer_id, created_at',
+        )
+        .single()
+      if (err) throw err
+      setOperations((prev) => prev.map((o) => (o.id === operationId ? data : o)))
+      window.dispatchEvent(new CustomEvent('ff:operations-changed'))
+      return data
+    },
+    [],
+  )
+
+  return { operations, loading, error, reload: load, create, update, remove }
 }

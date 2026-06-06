@@ -6,6 +6,8 @@ import { useOperations, type Operation, type PeriodFilter } from '../hooks/useOp
 import { useTransfers } from '../hooks/useTransfers'
 import { useFxRates } from '../hooks/useFxRates'
 import { ErrorBox } from '../components/AuthControls'
+import { AddOperationDialog } from '../components/AddOperationDialog'
+import { OperationActionsSheet, type ActionsSheetTarget } from '../components/OperationActionsSheet'
 import { formatDate, formatMoney } from '../lib/format'
 import { convertMoney } from '../lib/fx'
 
@@ -25,6 +27,9 @@ export function Operations() {
   const [period, setPeriod] = useState<PeriodFilter>('month')
   const { operations: allOperations, loading, error, remove: removeOperation } = useOperations(period)
   const { remove: removeTransfer } = useTransfers()
+  const [actionsTarget, setActionsTarget] = useState<ActionsSheetTarget | null>(null)
+  const [actionsCanModify, setActionsCanModify] = useState(false)
+  const [editingOp, setEditingOp] = useState<Operation | null>(null)
   const { accounts: allAccounts } = useAccounts()
   const { categories } = useCategories()
   const { ratesByDate } = useFxRates()
@@ -137,6 +142,59 @@ export function Operations() {
     await removeTransfer(transferId)
   }
 
+  function openOpSheet(op: Operation) {
+    const account = accountById.get(op.account_id)
+    const category = op.category_id ? categoryById.get(op.category_id) : null
+    setActionsCanModify(op.author_profile_id === profile?.id)
+    setActionsTarget({
+      kind: 'op',
+      op,
+      accountName: account?.name ?? '—',
+      accountCurrency: account?.currency ?? baseCurrency,
+      categoryName: category?.name ?? null,
+      categoryIcon: category?.icon ?? null,
+    })
+  }
+
+  function openTransferSheet(transferId: string, from: Operation, to: Operation) {
+    const fromAcc = accountById.get(from.account_id)
+    const toAcc = accountById.get(to.account_id)
+    setActionsCanModify(from.author_profile_id === profile?.id)
+    setActionsTarget({
+      kind: 'transfer',
+      transferId,
+      date: from.occurred_at,
+      from: {
+        name: fromAcc?.name ?? '—',
+        currency: fromAcc?.currency ?? baseCurrency,
+        amount: Number(from.amount),
+      },
+      to: {
+        name: toAcc?.name ?? '—',
+        currency: toAcc?.currency ?? baseCurrency,
+        amount: Number(to.amount),
+      },
+      note: from.note ?? null,
+    })
+  }
+
+  async function handleSheetDelete() {
+    if (!actionsTarget) return
+    const target = actionsTarget
+    setActionsTarget(null)
+    if (target.kind === 'op') {
+      await handleDeleteOp(target.op)
+    } else {
+      await handleDeleteTransfer(target.transferId)
+    }
+  }
+
+  function handleSheetEdit() {
+    if (!actionsTarget || actionsTarget.kind !== 'op') return
+    setEditingOp(actionsTarget.op)
+    setActionsTarget(null)
+  }
+
   return (
     <div className="space-y-5">
       <div>
@@ -172,44 +230,37 @@ export function Operations() {
       <ul className="space-y-1">
         {rows.map((row) => {
           if (row.kind === 'transfer') {
-            const isMine = row.from.author_profile_id === profile?.id
             const fromAcc = accountById.get(row.from.account_id)
             const toAcc = accountById.get(row.to.account_id)
             return (
-              <li
-                key={row.transferId}
-                className="flex items-center gap-3 py-3 px-3 rounded-lg hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors group"
-              >
-                <div className="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg">
-                  ↔
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
-                    Перевод
+              <li key={row.transferId}>
+                <button
+                  type="button"
+                  onClick={() => openTransferSheet(row.transferId, row.from, row.to)}
+                  className="w-full flex items-center gap-3 py-3 px-3 rounded-lg hover:bg-slate-100/60 dark:hover:bg-slate-800/40 active:bg-slate-200/60 dark:active:bg-slate-700/40 transition-colors text-left"
+                >
+                  <div className="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg shrink-0">
+                    ↔
                   </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                    {formatDate(row.from.occurred_at)} ·{' '}
-                    {fromAcc ? fromAcc.name : '—'} → {toAcc ? toAcc.name : '—'}
-                    {row.from.note ? ` · ${row.from.note}` : ''}
-                  </div>
-                </div>
-                <div className="text-sm font-semibold whitespace-nowrap text-slate-900 dark:text-slate-100 text-right">
-                  {formatMoney(Number(row.from.amount), fromAcc?.currency ?? baseCurrency)}
-                  {fromAcc && toAcc && fromAcc.currency !== toAcc.currency && (
-                    <div className="text-xs font-normal text-slate-500 dark:text-slate-400">
-                      → {formatMoney(Number(row.to.amount), toAcc.currency)}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                      Перевод
                     </div>
-                  )}
-                </div>
-                {isMine && (
-                  <button
-                    onClick={() => handleDeleteTransfer(row.transferId)}
-                    className="text-xs text-rose-500 hover:text-rose-700 opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Удалить перевод"
-                  >
-                    ✕
-                  </button>
-                )}
+                    <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                      {formatDate(row.from.occurred_at)} ·{' '}
+                      {fromAcc ? fromAcc.name : '—'} → {toAcc ? toAcc.name : '—'}
+                      {row.from.note ? ` · ${row.from.note}` : ''}
+                    </div>
+                  </div>
+                  <div className="text-sm font-semibold whitespace-nowrap text-slate-900 dark:text-slate-100 text-right">
+                    {formatMoney(Number(row.from.amount), fromAcc?.currency ?? baseCurrency)}
+                    {fromAcc && toAcc && fromAcc.currency !== toAcc.currency && (
+                      <div className="text-xs font-normal text-slate-500 dark:text-slate-400">
+                        → {formatMoney(Number(row.to.amount), toAcc.currency)}
+                      </div>
+                    )}
+                  </div>
+                </button>
               </li>
             )
           }
@@ -220,50 +271,58 @@ export function Operations() {
           const author = memberById.get(op.author_profile_id)
           const isMine = op.author_profile_id === profile?.id
           return (
-            <li
-              key={op.id}
-              className="flex items-center gap-3 py-3 px-3 rounded-lg hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors group"
-            >
-              <div className="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg">
-                {category?.icon ?? (op.kind === 'expense' ? '💸' : '💰')}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
-                    {category?.name ?? (op.kind === 'expense' ? 'Расход' : 'Доход')}
-                  </div>
-                  {op.is_private && <span title="Приватная" className="text-xs">🔒</span>}
-                </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                  {formatDate(op.occurred_at)} ·{' '}
-                  {account ? (account.visibility === 'shared' ? '🏠 ' : '🧍 ') + account.name : '—'}
-                  {op.note ? ` · ${op.note}` : ''}
-                  {!isMine && author?.display_name ? ` · ${author.display_name}` : ''}
-                </div>
-              </div>
-              <div
-                className={`text-sm font-semibold whitespace-nowrap ${
-                  op.kind === 'expense'
-                    ? 'text-slate-900 dark:text-slate-100'
-                    : 'text-emerald-600 dark:text-emerald-400'
-                }`}
+            <li key={op.id}>
+              <button
+                type="button"
+                onClick={() => openOpSheet(op)}
+                className="w-full flex items-center gap-3 py-3 px-3 rounded-lg hover:bg-slate-100/60 dark:hover:bg-slate-800/40 active:bg-slate-200/60 dark:active:bg-slate-700/40 transition-colors text-left"
               >
-                {op.kind === 'expense' ? '−' : '+'}
-                {formatMoney(Number(op.amount), account?.currency ?? baseCurrency).replace('−', '')}
-              </div>
-              {isMine && (
-                <button
-                  onClick={() => handleDeleteOp(op)}
-                  className="text-xs text-rose-500 hover:text-rose-700 opacity-0 group-hover:opacity-100 transition-opacity"
-                  title="Удалить"
+                <div className="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg shrink-0">
+                  {category?.icon ?? (op.kind === 'expense' ? '💸' : '💰')}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                      {category?.name ?? (op.kind === 'expense' ? 'Расход' : 'Доход')}
+                    </div>
+                    {op.is_private && <span title="Приватная" className="text-xs">🔒</span>}
+                  </div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                    {formatDate(op.occurred_at)} ·{' '}
+                    {account ? (account.visibility === 'shared' ? '🏠 ' : '🧍 ') + account.name : '—'}
+                    {op.note ? ` · ${op.note}` : ''}
+                    {!isMine && author?.display_name ? ` · ${author.display_name}` : ''}
+                  </div>
+                </div>
+                <div
+                  className={`text-sm font-semibold whitespace-nowrap ${
+                    op.kind === 'expense'
+                      ? 'text-slate-900 dark:text-slate-100'
+                      : 'text-emerald-600 dark:text-emerald-400'
+                  }`}
                 >
-                  ✕
-                </button>
-              )}
+                  {op.kind === 'expense' ? '−' : '+'}
+                  {formatMoney(Number(op.amount), account?.currency ?? baseCurrency).replace('−', '')}
+                </div>
+              </button>
             </li>
           )
         })}
       </ul>
+
+      <OperationActionsSheet
+        target={actionsTarget}
+        canModify={actionsCanModify}
+        onClose={() => setActionsTarget(null)}
+        onEdit={handleSheetEdit}
+        onDelete={handleSheetDelete}
+      />
+
+      <AddOperationDialog
+        open={!!editingOp}
+        onClose={() => setEditingOp(null)}
+        editOperation={editingOp}
+      />
     </div>
   )
 }
