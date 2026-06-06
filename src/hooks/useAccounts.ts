@@ -97,5 +97,24 @@ export function useAccounts() {
     window.dispatchEvent(new CustomEvent('ff:accounts-changed'))
   }, [])
 
-  return { accounts, loading, error, reload: load, create, remove }
+  const setRole = useCallback(
+    async (accountId: string, role: AccountRole, monthlyAmount: number | null) => {
+      const { data, error: err } = await supabase
+        .from('accounts')
+        .update({
+          role,
+          monthly_amount: role === 'monthly_budget' ? monthlyAmount : null,
+        })
+        .eq('id', accountId)
+        .select('id, household_id, owner_profile_id, name, currency, visibility, initial_balance, role, monthly_amount, created_at')
+        .single()
+      if (err) throw err
+      setAccounts((prev) => prev.map((a) => (a.id === accountId ? data : a)))
+      window.dispatchEvent(new CustomEvent('ff:accounts-changed'))
+      return data
+    },
+    [],
+  )
+
+  return { accounts, loading, error, reload: load, create, remove, setRole }
 }

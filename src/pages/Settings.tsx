@@ -1088,9 +1088,10 @@ function SelectBox({
 
 function AccountsSection() {
   const { profile } = useApp()
-  const { accounts, loading, error, create, remove } = useAccounts()
+  const { accounts, loading, error, create, remove, setRole } = useAccounts()
   const [adding, setAdding] = useState(false)
   const [removeError, setRemoveError] = useState<string | null>(null)
+  const [roleError, setRoleError] = useState<string | null>(null)
 
   async function handleDelete(account: Account) {
     setRemoveError(null)
@@ -1101,6 +1102,36 @@ function AccountsSection() {
       await remove(account.id)
     } catch (e) {
       setRemoveError(e instanceof Error ? e.message : 'Не удалось удалить')
+    }
+  }
+
+  async function handleMakeEnvelope(account: Account) {
+    setRoleError(null)
+    const suggested = String(Number(account.initial_balance) || 3600)
+    const raw = window.prompt(
+      `Месячный лимит конверта «${account.name}» (${account.currency}):`,
+      suggested,
+    )
+    if (raw === null) return
+    const n = Number(raw.replace(',', '.'))
+    if (!isFinite(n) || n <= 0) {
+      setRoleError('Лимит должен быть положительным числом')
+      return
+    }
+    try {
+      await setRole(account.id, 'monthly_budget', n)
+    } catch (e) {
+      setRoleError(e instanceof Error ? e.message : 'Не удалось обновить')
+    }
+  }
+
+  async function handleMakeWallet(account: Account) {
+    setRoleError(null)
+    if (!window.confirm(`Сделать «${account.name}» обычным счётом-накоплениями?`)) return
+    try {
+      await setRole(account.id, 'wallet', null)
+    } catch (e) {
+      setRoleError(e instanceof Error ? e.message : 'Не удалось обновить')
     }
   }
 
@@ -1146,16 +1177,38 @@ function AccountsSection() {
                 </div>
               </div>
               {a.owner_profile_id === profile?.id && (
-                <button
-                  onClick={() => handleDelete(a)}
-                  className="text-xs text-rose-600 dark:text-rose-400 hover:underline"
-                >
-                  Удалить
-                </button>
+                <div className="flex flex-col items-end gap-1">
+                  {a.role === 'monthly_budget' ? (
+                    <button
+                      onClick={() => handleMakeWallet(a)}
+                      className="text-xs text-slate-600 dark:text-slate-400 hover:underline"
+                    >
+                      🏦 В накопления
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleMakeEnvelope(a)}
+                      className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                    >
+                      💰 Сделать бюджетом
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleDelete(a)}
+                    className="text-xs text-rose-600 dark:text-rose-400 hover:underline"
+                  >
+                    Удалить
+                  </button>
+                </div>
               )}
             </li>
           ))}
         </ul>
+      )}
+      {roleError && (
+        <div className="mt-3">
+          <ErrorBox>{roleError}</ErrorBox>
+        </div>
       )}
 
       {removeError && (
