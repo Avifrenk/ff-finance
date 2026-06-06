@@ -116,5 +116,36 @@ export function useAccounts() {
     [],
   )
 
-  return { accounts, loading, error, reload: load, create, remove, setRole }
+  const update = useCallback(
+    async (
+      accountId: string,
+      patch: {
+        name?: string
+        visibility?: 'personal' | 'shared'
+        currency?: string
+        initial_balance?: number
+        monthly_amount?: number | null
+      },
+    ) => {
+      const { data, error: err } = await supabase
+        .from('accounts')
+        .update({
+          ...(patch.name !== undefined && { name: patch.name }),
+          ...(patch.visibility !== undefined && { visibility: patch.visibility }),
+          ...(patch.currency !== undefined && { currency: patch.currency }),
+          ...(patch.initial_balance !== undefined && { initial_balance: patch.initial_balance }),
+          ...(patch.monthly_amount !== undefined && { monthly_amount: patch.monthly_amount }),
+        })
+        .eq('id', accountId)
+        .select('id, household_id, owner_profile_id, name, currency, visibility, initial_balance, role, monthly_amount, created_at')
+        .single()
+      if (err) throw err
+      setAccounts((prev) => prev.map((a) => (a.id === accountId ? data : a)))
+      window.dispatchEvent(new CustomEvent('ff:accounts-changed'))
+      return data
+    },
+    [],
+  )
+
+  return { accounts, loading, error, reload: load, create, remove, setRole, update }
 }

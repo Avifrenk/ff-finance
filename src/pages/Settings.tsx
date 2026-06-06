@@ -1088,8 +1088,9 @@ function SelectBox({
 
 function AccountsSection() {
   const { profile } = useApp()
-  const { accounts, loading, error, create, remove, setRole } = useAccounts()
+  const { accounts, loading, error, create, remove, setRole, update } = useAccounts()
   const [adding, setAdding] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [removeError, setRemoveError] = useState<string | null>(null)
   const [roleError, setRoleError] = useState<string | null>(null)
 
@@ -1161,44 +1162,61 @@ function AccountsSection() {
       {accounts.length > 0 && (
         <ul className="divide-y divide-slate-200 dark:divide-slate-700 -my-2">
           {accounts.map((a) => (
-            <li key={a.id} className="py-3 flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-medium text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  <span>{a.role === 'monthly_budget' ? '💰' : a.visibility === 'shared' ? '🏠' : '🧍'}</span>
-                  <span>{a.name}</span>
-                  <span className="text-xs text-slate-500 dark:text-slate-400 font-normal">
-                    {currencySymbol(a.currency)} {a.currency}
-                  </span>
+            <li key={a.id} className="py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-medium text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <span>{a.role === 'monthly_budget' ? '💰' : a.visibility === 'shared' ? '🏠' : '🧍'}</span>
+                    <span>{a.name}</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400 font-normal">
+                      {currencySymbol(a.currency)} {a.currency}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                    {a.role === 'monthly_budget'
+                      ? `Бюджет месяца · лимит ${formatMoney(a.monthly_amount ?? 0, a.currency)}`
+                      : `${a.visibility === 'shared' ? 'Семейный' : 'Личный'} · Начальный баланс ${formatMoney(a.initial_balance, a.currency)}`}
+                  </div>
                 </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">
-                  {a.role === 'monthly_budget'
-                    ? `Бюджет месяца · лимит ${formatMoney(a.monthly_amount ?? 0, a.currency)}`
-                    : `${a.visibility === 'shared' ? 'Семейный' : 'Личный'} · Начальный баланс ${formatMoney(a.initial_balance, a.currency)}`}
-                </div>
-              </div>
-              {a.owner_profile_id === profile?.id && (
-                <div className="flex flex-col items-end gap-1">
-                  {a.role === 'monthly_budget' ? (
+                {a.owner_profile_id === profile?.id && (
+                  <div className="flex flex-col items-end gap-1">
                     <button
-                      onClick={() => handleMakeWallet(a)}
+                      onClick={() => setEditingId(editingId === a.id ? null : a.id)}
                       className="text-xs text-slate-600 dark:text-slate-400 hover:underline"
                     >
-                      🏦 В накопления
+                      {editingId === a.id ? '✕ Закрыть' : '✏ Изменить'}
                     </button>
-                  ) : (
+                    {a.role === 'monthly_budget' ? (
+                      <button
+                        onClick={() => handleMakeWallet(a)}
+                        className="text-xs text-slate-600 dark:text-slate-400 hover:underline"
+                      >
+                        🏦 В накопления
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleMakeEnvelope(a)}
+                        className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                      >
+                        💰 Сделать бюджетом
+                      </button>
+                    )}
                     <button
-                      onClick={() => handleMakeEnvelope(a)}
-                      className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                      onClick={() => handleDelete(a)}
+                      className="text-xs text-rose-600 dark:text-rose-400 hover:underline"
                     >
-                      💰 Сделать бюджетом
+                      Удалить
                     </button>
-                  )}
-                  <button
-                    onClick={() => handleDelete(a)}
-                    className="text-xs text-rose-600 dark:text-rose-400 hover:underline"
-                  >
-                    Удалить
-                  </button>
+                  </div>
+                )}
+              </div>
+              {editingId === a.id && (
+                <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                  <EditAccountForm
+                    account={a}
+                    update={update}
+                    onDone={() => setEditingId(null)}
+                  />
                 </div>
               )}
             </li>
@@ -1223,6 +1241,155 @@ function AccountsSection() {
         </div>
       )}
     </section>
+  )
+}
+
+function EditAccountForm({
+  account,
+  update,
+  onDone,
+}: {
+  account: Account
+  update: (
+    id: string,
+    patch: {
+      name?: string
+      visibility?: 'personal' | 'shared'
+      currency?: string
+      initial_balance?: number
+      monthly_amount?: number | null
+    },
+  ) => Promise<unknown>
+  onDone: () => void
+}) {
+  const { currencies } = useCurrencies()
+  const isEnvelope = account.role === 'monthly_budget'
+  const [name, setName] = useState(account.name)
+  const [visibility, setVisibility] = useState<'personal' | 'shared'>(account.visibility)
+  const [currency, setCurrency] = useState(account.currency)
+  const [initialBalance, setInitialBalance] = useState(String(account.initial_balance))
+  const [monthlyAmount, setMonthlyAmount] = useState(
+    account.monthly_amount !== null ? String(account.monthly_amount) : '',
+  )
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+    if (!name.trim()) {
+      setError('Введите название')
+      return
+    }
+    const balanceNum = Number(initialBalance.replace(',', '.'))
+    if (!isFinite(balanceNum)) {
+      setError('Начальный баланс — число')
+      return
+    }
+    let monthlyNum: number | null = null
+    if (isEnvelope) {
+      monthlyNum = Number(monthlyAmount.replace(',', '.'))
+      if (!isFinite(monthlyNum) || monthlyNum <= 0) {
+        setError('Лимит — положительное число')
+        return
+      }
+    }
+    setBusy(true)
+    try {
+      await update(account.id, {
+        name: name.trim(),
+        visibility,
+        currency,
+        initial_balance: balanceNum,
+        ...(isEnvelope && { monthly_amount: monthlyNum }),
+      })
+      onDone()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось сохранить')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <div>
+        <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Название</label>
+        <AuthInput
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
+      </div>
+
+      {!isEnvelope && (
+        <div>
+          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Тип</label>
+          <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-100/60 dark:bg-slate-800/60">
+            <VisibilityButton active={visibility === 'personal'} onClick={() => setVisibility('personal')}>
+              🧍 Личный
+            </VisibilityButton>
+            <VisibilityButton active={visibility === 'shared'} onClick={() => setVisibility('shared')}>
+              🏠 Семейный
+            </VisibilityButton>
+          </div>
+        </div>
+      )}
+
+      <div>
+        <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Валюта</label>
+        <SelectBox value={currency} onChange={setCurrency}>
+          {currencies.map((c: Currency) => (
+            <option key={c.code} value={c.code}>
+              {c.symbol} {c.code} — {c.name}
+            </option>
+          ))}
+        </SelectBox>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+          Начальный баланс
+        </label>
+        <AuthInput
+          type="number"
+          step="0.01"
+          value={initialBalance}
+          onChange={(e) => setInitialBalance(e.target.value)}
+          required
+        />
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+          Поменяешь начальный баланс — текущий тоже сдвинется на ту же разницу (операции не трогаются).
+        </p>
+      </div>
+
+      {isEnvelope && (
+        <div>
+          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+            Месячный лимит
+          </label>
+          <AuthInput
+            type="text"
+            inputMode="decimal"
+            value={monthlyAmount}
+            onChange={(e) => setMonthlyAmount(e.target.value)}
+            required
+          />
+        </div>
+      )}
+
+      {error && <ErrorBox>{error}</ErrorBox>}
+
+      <div className="flex gap-2">
+        <SecondaryButton type="button" onClick={onDone}>
+          Отмена
+        </SecondaryButton>
+        <PrimaryButton type="submit" disabled={busy}>
+          {busy ? 'Сохраняем…' : 'Сохранить'}
+        </PrimaryButton>
+      </div>
+    </form>
   )
 }
 

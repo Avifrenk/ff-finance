@@ -309,12 +309,29 @@ export function Dashboard() {
 
         {hasWallet && (
           <div>
-            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              🏦 {hasEnvelope ? 'Накопления' : 'Общий баланс'}
+            <div className="flex items-center justify-between">
+              <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                🏦 {hasEnvelope ? 'Накопления' : 'Общий баланс'}
+              </div>
+              <div className="text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                {formatMoney(walletBalance, baseCurrency)}
+              </div>
             </div>
-            <div className={`${hasEnvelope ? 'text-2xl' : 'text-3xl'} font-semibold mt-1 text-slate-900 dark:text-slate-100`}>
-              {formatMoney(walletBalance, baseCurrency)}
-            </div>
+            <ul className="mt-2 space-y-1.5">
+              {accounts
+                .filter((a) => a.role !== 'monthly_budget')
+                .map((a) => (
+                  <li key={a.id} className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2 min-w-0">
+                      <span className="shrink-0">{a.visibility === 'shared' ? '🏠' : '🧍'}</span>
+                      <span className="truncate text-slate-700 dark:text-slate-300">{a.name}</span>
+                    </span>
+                    <span className="tabular-nums text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                      {formatMoney(balanceByAccount.get(a.id) ?? 0, a.currency)}
+                    </span>
+                  </li>
+                ))}
+            </ul>
           </div>
         )}
 
