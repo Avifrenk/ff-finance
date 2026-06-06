@@ -16,8 +16,6 @@ interface Props {
   onCreate: (input: CreateRouteInput) => Promise<void>
 }
 
-type DateMode = 'day' | 'month'
-
 // Месяц для сравнения «не в прошлом»: 'YYYY-MM' текущего месяца.
 function thisMonthISO(): string {
   return todayISO().slice(0, 7)
@@ -27,12 +25,10 @@ export function RouteDialog({ open, onClose, ownerChatId, onCreate }: Props) {
   const [origin, setOrigin] = useState('')
   const [destination, setDestination] = useState('')
 
-  const [departMode, setDepartMode] = useState<DateMode>('day')
+  // Один переключатель режима для обеих дат: конкретные дни или целые месяцы.
+  const [monthMode, setMonthMode] = useState(false)
   const [departDay, setDepartDay] = useState('')
   const [departMonth, setDepartMonth] = useState('')
-
-  const [roundTrip, setRoundTrip] = useState(false)
-  const [returnMode, setReturnMode] = useState<DateMode>('day')
   const [returnDay, setReturnDay] = useState('')
   const [returnMonth, setReturnMonth] = useState('')
 
@@ -48,11 +44,9 @@ export function RouteDialog({ open, onClose, ownerChatId, onCreate }: Props) {
     if (!open) return
     setOrigin('')
     setDestination('')
-    setDepartMode('day')
+    setMonthMode(false)
     setDepartDay('')
     setDepartMonth('')
-    setRoundTrip(false)
-    setReturnMode('day')
     setReturnDay('')
     setReturnMonth('')
     setMaxTransfers('')
@@ -69,15 +63,10 @@ export function RouteDialog({ open, onClose, ownerChatId, onCreate }: Props) {
   if (!open) return null
 
   function departValue(): string {
-    return departMode === 'month' ? departMonth : departDay
+    return monthMode ? departMonth : departDay
   }
   function returnValue(): string {
-    return returnMode === 'month' ? returnMonth : returnDay
-  }
-
-  /** Месяц-префикс значения ('YYYY-MM') для сравнения смешанных режимов. */
-  function monthOf(value: string): string {
-    return value.slice(0, 7)
+    return monthMode ? returnMonth : returnDay
   }
 
   async function submit(e: FormEvent) {
@@ -99,33 +88,26 @@ export function RouteDialog({ open, onClose, ownerChatId, onCreate }: Props) {
 
     const depart = departValue()
     if (!depart) {
-      setError('Укажите дату вылета.')
+      setError(monthMode ? 'Укажите месяц вылета.' : 'Укажите дату вылета «Туда».')
       return
     }
     const today = todayISO()
-    const departPast =
-      departMode === 'month' ? depart < thisMonthISO() : depart < today
+    const departPast = monthMode ? depart < thisMonthISO() : depart < today
     if (departPast) {
       setError('Дата вылета уже прошла — выберите будущую.')
       return
     }
 
+    // Обратная дата необязательна: пусто = билет в одну сторону.
     let returnDate: string | null = null
-    if (roundTrip) {
-      const ret = returnValue()
-      if (!ret) {
-        setError('Вы включили обратный билет — укажите дату возврата (или выключите обратный).')
-        return
-      }
-      const retPast = returnMode === 'month' ? ret < thisMonthISO() : ret < today
+    const ret = returnValue()
+    if (ret) {
+      const retPast = monthMode ? ret < thisMonthISO() : ret < today
       if (retPast) {
         setError('Дата возврата уже прошла — выберите будущую.')
         return
       }
-      // Если хоть одно значение — месяц, сравниваем по месяцам.
-      const mixed = departMode === 'month' || returnMode === 'month'
-      const before = mixed ? monthOf(ret) < monthOf(depart) : ret < depart
-      if (before) {
+      if (ret < depart) {
         setError('Дата возврата раньше вылета — поменяйте их местами.')
         return
       }
@@ -228,63 +210,62 @@ export function RouteDialog({ open, onClose, ownerChatId, onCreate }: Props) {
             </div>
           </div>
 
-          {/* Вылет */}
-          <div>
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">
-              Когда вылет
-            </label>
-            <DateModeTabs mode={departMode} onChange={setDepartMode} />
-            {departMode === 'day' ? (
-              <AuthInput
-                type="date"
-                min={todayISO()}
-                value={departDay}
-                onChange={(e) => setDepartDay(e.target.value)}
-              />
-            ) : (
-              <AuthInput
-                type="month"
-                min={thisMonthISO()}
-                value={departMonth}
-                onChange={(e) => setDepartMonth(e.target.value)}
-              />
-            )}
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              «Целый месяц» — если точная дата неважна, ищем самый дешёвый день месяца.
-            </p>
+          {/* Даты: Туда (обязательно) и Обратно (пусто = в одну сторону) */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Туда
+              </label>
+              {monthMode ? (
+                <AuthInput
+                  type="month"
+                  min={thisMonthISO()}
+                  value={departMonth}
+                  onChange={(e) => setDepartMonth(e.target.value)}
+                />
+              ) : (
+                <AuthInput
+                  type="date"
+                  min={todayISO()}
+                  value={departDay}
+                  onChange={(e) => setDepartDay(e.target.value)}
+                />
+              )}
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Обратно
+              </label>
+              {monthMode ? (
+                <AuthInput
+                  type="month"
+                  min={departMonth || thisMonthISO()}
+                  value={returnMonth}
+                  onChange={(e) => setReturnMonth(e.target.value)}
+                />
+              ) : (
+                <AuthInput
+                  type="date"
+                  min={departDay || todayISO()}
+                  value={returnDay}
+                  onChange={(e) => setReturnDay(e.target.value)}
+                />
+              )}
+            </div>
           </div>
-
-          {/* Обратный билет */}
-          <div>
-            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+          <div className="-mt-2 space-y-1.5">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              «Обратно» можно не заполнять — тогда ищем билет в одну сторону.
+            </p>
+            <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 cursor-pointer">
               <input
                 type="checkbox"
-                checked={roundTrip}
-                onChange={(e) => setRoundTrip(e.target.checked)}
+                checked={monthMode}
+                onChange={(e) => setMonthMode(e.target.checked)}
                 className="h-4 w-4 rounded border-slate-300 text-indigo-500 focus:ring-indigo-500"
               />
-              Туда-обратно (нужна дата возврата)
+              Точные даты неважны — искать по всему месяцу
             </label>
-            {roundTrip && (
-              <div className="mt-2">
-                <DateModeTabs mode={returnMode} onChange={setReturnMode} />
-                {returnMode === 'day' ? (
-                  <AuthInput
-                    type="date"
-                    min={departMode === 'day' ? departDay || todayISO() : todayISO()}
-                    value={returnDay}
-                    onChange={(e) => setReturnDay(e.target.value)}
-                  />
-                ) : (
-                  <AuthInput
-                    type="month"
-                    min={thisMonthISO()}
-                    value={returnMonth}
-                    onChange={(e) => setReturnMonth(e.target.value)}
-                  />
-                )}
-              </div>
-            )}
           </div>
 
           {/* Пересадки */}
@@ -361,19 +342,6 @@ function PlaceHint({ raw, iata }: { raw: string; iata: string | null }) {
   }
   return (
     <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">не распознали город</p>
-  )
-}
-
-function DateModeTabs({ mode, onChange }: { mode: DateMode; onChange: (m: DateMode) => void }) {
-  return (
-    <div className="grid grid-cols-2 gap-1 p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 mb-2">
-      <ModeTab active={mode === 'day'} onClick={() => onChange('day')}>
-        Конкретный день
-      </ModeTab>
-      <ModeTab active={mode === 'month'} onClick={() => onChange('month')}>
-        Целый месяц
-      </ModeTab>
-    </div>
   )
 }
 

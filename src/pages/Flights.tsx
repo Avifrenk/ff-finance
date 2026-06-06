@@ -44,6 +44,28 @@ export function Flights() {
         <PrimaryButton onClick={handleAdd}>+ Маршрут</PrimaryButton>
       </header>
 
+      <details className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-900/40">
+        <summary className="cursor-pointer px-5 py-3 text-sm font-medium text-slate-700 dark:text-slate-300">
+          ❓ Как это работает
+        </summary>
+        <div className="px-5 pb-4 text-sm text-slate-600 dark:text-slate-300 space-y-2 border-t border-slate-200 dark:border-slate-700 pt-3">
+          <p>
+            Сам сайт билеты не ищет — это пульт. Поиском занимается наш бот: он
+            несколько раз в день смотрит цену на Aviasales по каждому вашему
+            маршруту и копит среднюю за пару недель.
+          </p>
+          <p>
+            Как только цена упадёт на <span className="font-medium">20% и больше</span>{' '}
+            ниже этой средней — бот пришлёт вам пуш в Telegram со ссылкой. То есть
+            вы не следите за ценами сами — вас просто зовут, когда стало выгодно.
+          </p>
+          <p className="text-slate-500 dark:text-slate-400">
+            У нового маршрута цены появятся не сразу — боту нужно несколько часов,
+            чтобы собрать первые наблюдения.
+          </p>
+        </div>
+      </details>
+
       {/* Напоминание привязать Telegram */}
       {!linkLoading && !linked && (
         <button

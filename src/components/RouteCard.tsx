@@ -56,8 +56,12 @@ export function RouteCard({ route, stats, onArchive, onRestore, onDelete }: Prop
             <span className="truncate">{placeLabel(route.destination)}</span>
           </div>
           <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            🛫 {formatFlightDate(route.depart_date)}
-            {route.return_date && <> · 🛬 {formatFlightDate(route.return_date)}</>}
+            Туда: {formatFlightDate(route.depart_date)}
+            {route.return_date ? (
+              <> · Обратно: {formatFlightDate(route.return_date)}</>
+            ) : (
+              <> · в одну сторону</>
+            )}
           </div>
         </div>
         {isDeal && (
