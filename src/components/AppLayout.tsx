@@ -46,6 +46,7 @@ export function AppLayout() {
             <NavItem to="/goals" icon="🎯" label="Цели" />
             <NavItem to="/crypto" icon="🪙" label="Крипта" />
             <NavItem to="/debts" icon="🤝" label="Долги" />
+            <NavItem to="/flights" icon="✈️" label="Билеты" />
             <NavItem to="/settings" icon="⚙️" label="Настройки" />
             <button
               onClick={() => signOut()}
@@ -90,6 +91,7 @@ export function AppLayout() {
           <TabItem to="/goals" icon="🎯" label="Цели" />
           <TabItem to="/crypto" icon="🪙" label="Крипта" />
           <TabItem to="/debts" icon="🤝" label="Долги" />
+          <TabItem to="/flights" icon="✈️" label="Билеты" />
           <TabItem to="/settings" icon="⚙️" label="Настройки" />
         </div>
       </nav>

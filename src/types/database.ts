@@ -786,6 +786,132 @@ export type Database = {
         }
         Relationships: []
       }
+      flight_routes: {
+        Row: {
+          id: number
+          owner_chat_id: number
+          origin: string
+          destination: string
+          depart_date: string
+          return_date: string | null
+          status: 'active' | 'archived'
+          created_at: string
+          max_transfers: number | null
+          airlines: string | null
+          airlines_mode: 'only' | 'except' | null
+          household_id: string | null
+          created_by_profile_id: string | null
+        }
+        Insert: {
+          id?: number
+          owner_chat_id: number
+          origin: string
+          destination: string
+          depart_date: string
+          return_date?: string | null
+          status?: 'active' | 'archived'
+          created_at?: string
+          max_transfers?: number | null
+          airlines?: string | null
+          airlines_mode?: 'only' | 'except' | null
+          household_id?: string | null
+          created_by_profile_id?: string | null
+        }
+        Update: {
+          id?: number
+          owner_chat_id?: number
+          origin?: string
+          destination?: string
+          depart_date?: string
+          return_date?: string | null
+          status?: 'active' | 'archived'
+          created_at?: string
+          max_transfers?: number | null
+          airlines?: string | null
+          airlines_mode?: 'only' | 'except' | null
+          household_id?: string | null
+          created_by_profile_id?: string | null
+        }
+        Relationships: []
+      }
+      flight_observations: {
+        Row: {
+          id: number
+          route_id: number
+          price: number
+          currency: string
+          airline: string
+          transfers: number
+          link: string
+          observed_at: string
+        }
+        Insert: {
+          id?: number
+          route_id: number
+          price: number
+          currency: string
+          airline?: string
+          transfers?: number
+          link?: string
+          observed_at?: string
+        }
+        Update: {
+          id?: number
+          route_id?: number
+          price?: number
+          currency?: string
+          airline?: string
+          transfers?: number
+          link?: string
+          observed_at?: string
+        }
+        Relationships: []
+      }
+      flight_alerts: {
+        Row: {
+          id: number
+          route_id: number
+          price: number
+          average: number
+          drop_pct: number
+          sent_at: string
+        }
+        Insert: {
+          id?: number
+          route_id: number
+          price: number
+          average: number
+          drop_pct: number
+          sent_at?: string
+        }
+        Update: {
+          id?: number
+          route_id?: number
+          price?: number
+          average?: number
+          drop_pct?: number
+          sent_at?: string
+        }
+        Relationships: []
+      }
+      flight_telegram_links: {
+        Row: {
+          profile_id: string
+          chat_id: number
+          created_at: string
+        }
+        Insert: {
+          profile_id: string
+          chat_id: number
+          created_at?: string
+        }
+        Update: {
+          profile_id?: string
+          chat_id?: number
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: {

@@ -16,6 +16,7 @@ import { Goals } from './pages/Goals'
 import { Crypto } from './pages/Crypto'
 import { CryptoTax } from './pages/CryptoTax'
 import { Debts } from './pages/Debts'
+import { Flights } from './pages/Flights'
 import { Settings } from './pages/Settings'
 
 function App() {
@@ -40,6 +41,7 @@ function App() {
               <Route path="crypto" element={<Crypto />} />
               <Route path="crypto/tax" element={<CryptoTax />} />
               <Route path="debts" element={<Debts />} />
+              <Route path="flights" element={<Flights />} />
               <Route path="settings" element={<Settings />} />
             </Route>
           </Route>
