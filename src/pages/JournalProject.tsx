@@ -4,6 +4,7 @@ import { useApp } from '../contexts/useApp'
 import { useWjProjects } from '../hooks/useWjProjects'
 import { useWjFields, type WjField } from '../hooks/useWjFields'
 import { useWjRecords, type WjRecord } from '../hooks/useWjRecords'
+import { JournalProjectAnalytics } from '../components/JournalProjectAnalytics'
 import { formatMoney } from '../lib/format'
 import {
   getChoices,
@@ -118,6 +119,10 @@ export function JournalProject() {
         </section>
       ) : (
         <>
+          {records.length > 0 && (
+            <JournalProjectAnalytics records={records} fields={fields} />
+          )}
+
           <div className="flex items-center justify-between">
             <p className="text-sm text-slate-500 dark:text-slate-400">
               Записи — клиенты и заказы по проекту.
