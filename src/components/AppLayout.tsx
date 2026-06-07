@@ -47,6 +47,7 @@ export function AppLayout() {
             <NavItem to="/crypto" icon="🪙" label="Крипта" />
             <NavItem to="/debts" icon="🤝" label="Долги" />
             <NavItem to="/flights" icon="✈️" label="Билеты" />
+            <NavItem to="/journal" icon="🗂" label="Дела" end={false} />
             <NavItem to="/settings" icon="⚙️" label="Настройки" />
             <button
               onClick={() => signOut()}
@@ -92,6 +93,7 @@ export function AppLayout() {
           <TabItem to="/crypto" icon="🪙" label="Крипта" />
           <TabItem to="/debts" icon="🤝" label="Долги" />
           <TabItem to="/flights" icon="✈️" label="Билеты" />
+          <TabItem to="/journal" icon="🗂" label="Дела" end={false} />
           <TabItem to="/settings" icon="⚙️" label="Настройки" />
         </div>
       </nav>
@@ -110,11 +112,11 @@ export function AppLayout() {
   )
 }
 
-function TabItem({ to, icon, label }: { to: string; icon: string; label: string }) {
+function TabItem({ to, icon, label, end = true }: { to: string; icon: string; label: string; end?: boolean }) {
   return (
     <NavLink
       to={to}
-      end
+      end={end}
       className={({ isActive }) =>
         `shrink-0 snap-start flex flex-col items-center justify-center gap-1 px-3 py-1.5 min-w-[64px] rounded-md transition-colors ${
           isActive
@@ -129,11 +131,11 @@ function TabItem({ to, icon, label }: { to: string; icon: string; label: string 
   )
 }
 
-function NavItem({ to, icon, label }: { to: string; icon: string; label: string }) {
+function NavItem({ to, icon, label, end = true }: { to: string; icon: string; label: string; end?: boolean }) {
   return (
     <NavLink
       to={to}
-      end
+      end={end}
       className={({ isActive }) =>
         `inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${
           isActive

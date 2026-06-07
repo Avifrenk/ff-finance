@@ -912,6 +912,171 @@ export type Database = {
         }
         Relationships: []
       }
+      wj_projects: {
+        Row: {
+          id: string
+          household_id: string
+          owner_profile_id: string
+          visibility: 'personal' | 'shared'
+          name: string
+          icon: string | null
+          color: string | null
+          is_archived: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          household_id: string
+          owner_profile_id: string
+          visibility?: 'personal' | 'shared'
+          name: string
+          icon?: string | null
+          color?: string | null
+          is_archived?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          household_id?: string
+          owner_profile_id?: string
+          visibility?: 'personal' | 'shared'
+          name?: string
+          icon?: string | null
+          color?: string | null
+          is_archived?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      wj_fields: {
+        Row: {
+          id: string
+          project_id: string
+          household_id: string
+          key: string
+          label: string
+          type: 'text' | 'number' | 'money' | 'date' | 'phone' | 'link' | 'select' | 'status' | 'checklist' | 'note'
+          options: Record<string, unknown> | unknown[] | null
+          money_direction: 'income' | 'expense' | null
+          is_required: boolean
+          sort_order: number
+          analytics_role: 'amount' | 'date_payment' | 'date_due' | 'status' | 'client_name' | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          household_id: string
+          key: string
+          label: string
+          type: 'text' | 'number' | 'money' | 'date' | 'phone' | 'link' | 'select' | 'status' | 'checklist' | 'note'
+          options?: Record<string, unknown> | unknown[] | null
+          money_direction?: 'income' | 'expense' | null
+          is_required?: boolean
+          sort_order?: number
+          analytics_role?: 'amount' | 'date_payment' | 'date_due' | 'status' | 'client_name' | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          household_id?: string
+          key?: string
+          label?: string
+          type?: 'text' | 'number' | 'money' | 'date' | 'phone' | 'link' | 'select' | 'status' | 'checklist' | 'note'
+          options?: Record<string, unknown> | unknown[] | null
+          money_direction?: 'income' | 'expense' | null
+          is_required?: boolean
+          sort_order?: number
+          analytics_role?: 'amount' | 'date_payment' | 'date_due' | 'status' | 'client_name' | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      wj_records: {
+        Row: {
+          id: string
+          project_id: string
+          household_id: string
+          values: Record<string, unknown>
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          household_id: string
+          values?: Record<string, unknown>
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          household_id?: string
+          values?: Record<string, unknown>
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      wj_tasks: {
+        Row: {
+          id: string
+          household_id: string
+          owner_profile_id: string
+          visibility: 'personal' | 'shared'
+          title: string
+          notes: string | null
+          due_date: string | null
+          is_done: boolean
+          done_at: string | null
+          reminder_at: string | null
+          project_id: string | null
+          record_id: string | null
+          sort_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          household_id: string
+          owner_profile_id: string
+          visibility?: 'personal' | 'shared'
+          title: string
+          notes?: string | null
+          due_date?: string | null
+          is_done?: boolean
+          done_at?: string | null
+          reminder_at?: string | null
+          project_id?: string | null
+          record_id?: string | null
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          household_id?: string
+          owner_profile_id?: string
+          visibility?: 'personal' | 'shared'
+          title?: string
+          notes?: string | null
+          due_date?: string | null
+          is_done?: boolean
+          done_at?: string | null
+          reminder_at?: string | null
+          project_id?: string | null
+          record_id?: string | null
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: {

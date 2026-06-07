@@ -60,6 +60,7 @@ export function Assistant() {
   }, [profile])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadHistory()
   }, [loadHistory])
 
@@ -85,7 +86,7 @@ export function Assistant() {
 
     // Оптимистично добавляем user-сообщение
     const optimisticUser: ChatMessage = {
-      id: `optimistic-${Date.now()}`,
+      id: `optimistic-${crypto.randomUUID()}`,
       role: 'user',
       content: text,
       created_at: new Date().toISOString(),
@@ -172,7 +173,9 @@ export function Assistant() {
                 throw new Error(ev.message ?? 'Ошибка ассистента')
               }
             } catch (parseErr) {
-              throw new Error(`SSE parse: ${(parseErr as Error).message}`)
+              throw new Error(`SSE parse: ${(parseErr as Error).message}`, {
+                cause: parseErr,
+              })
             }
           }
         }

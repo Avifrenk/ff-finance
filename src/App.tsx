@@ -17,6 +17,11 @@ import { Crypto } from './pages/Crypto'
 import { CryptoTax } from './pages/CryptoTax'
 import { Debts } from './pages/Debts'
 import { Flights } from './pages/Flights'
+import { Journal } from './pages/Journal'
+import { JournalTasks } from './pages/JournalTasks'
+import { JournalProjects } from './pages/JournalProjects'
+import { JournalProject } from './pages/JournalProject'
+import { JournalProjectFields } from './pages/JournalProjectFields'
 import { Settings } from './pages/Settings'
 
 function App() {
@@ -42,6 +47,12 @@ function App() {
               <Route path="crypto/tax" element={<CryptoTax />} />
               <Route path="debts" element={<Debts />} />
               <Route path="flights" element={<Flights />} />
+              <Route path="journal" element={<Journal />}>
+                <Route index element={<JournalTasks />} />
+                <Route path="projects" element={<JournalProjects />} />
+                <Route path="projects/:id" element={<JournalProject />} />
+                <Route path="projects/:id/fields" element={<JournalProjectFields />} />
+              </Route>
               <Route path="settings" element={<Settings />} />
             </Route>
           </Route>

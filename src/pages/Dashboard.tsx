@@ -102,22 +102,23 @@ export function Dashboard() {
     let missing = false
     for (const a of accounts) {
       const raw = balanceByAccount.get(a.id) ?? 0
-      const toBase = (val: number) => {
-        if (a.currency === baseCurrency) return val
-        const conv = convertMoney(val, a.currency, baseCurrency, ratesByDate)
-        if (conv === null) {
-          missing = true
-          return null
-        }
-        return conv
-      }
+      // toBase — чистая: только конвертирует (null = нет курса). Флаг missing
+      // выставляем в теле цикла на местах проверки, не мутируя из замыкания.
+      const toBase = (val: number) =>
+        a.currency === baseCurrency
+          ? val
+          : convertMoney(val, a.currency, baseCurrency, ratesByDate)
       const convertedBalance = toBase(raw)
-      if (convertedBalance === null) continue
+      if (convertedBalance === null) {
+        missing = true
+        continue
+      }
       if (a.role === 'monthly_budget') {
         envelope += convertedBalance
         if (a.monthly_amount !== null) {
           const convertedLimit = toBase(Number(a.monthly_amount))
-          if (convertedLimit !== null) limit += convertedLimit
+          if (convertedLimit === null) missing = true
+          else limit += convertedLimit
         }
       } else {
         wallet += convertedBalance
