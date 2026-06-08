@@ -21,6 +21,7 @@ import { Journal } from './pages/Journal'
 import { JournalTasks } from './pages/JournalTasks'
 import { JournalProjects } from './pages/JournalProjects'
 import { JournalProject } from './pages/JournalProject'
+import { JournalClient } from './pages/JournalClient'
 import { JournalProjectFields } from './pages/JournalProjectFields'
 import { Settings } from './pages/Settings'
 
@@ -51,6 +52,7 @@ function App() {
                 <Route index element={<JournalTasks />} />
                 <Route path="projects" element={<JournalProjects />} />
                 <Route path="projects/:id" element={<JournalProject />} />
+                <Route path="projects/:id/clients/:clientId" element={<JournalClient />} />
                 <Route path="projects/:id/fields" element={<JournalProjectFields />} />
               </Route>
               <Route path="settings" element={<Settings />} />
