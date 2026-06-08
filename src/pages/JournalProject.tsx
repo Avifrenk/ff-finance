@@ -33,6 +33,16 @@ export function JournalProject() {
     return m
   }, [records])
 
+  // Источник аналитики: в проектах с заказами — заказы (wj_records); в карточных
+  // (нет order-полей, Мазаль/Репат/Ника) — сами карточки клиентов как «записи»,
+  // деньги/даты лежат в client-полях. client_id=id карточки → срез «по клиентам».
+  const cardMode = orderFields.length === 0
+  const analyticsRecords = useMemo(
+    () => (cardMode ? clients.map((c) => ({ ...c, client_id: c.id })) : records),
+    [cardMode, clients, records],
+  )
+  const analyticsFields = cardMode ? clientFields : fields
+
   if (!household || !id) return null
 
   const project = projects.find((p) => p.id === id)
@@ -114,10 +124,10 @@ export function JournalProject() {
         </section>
       ) : (
         <>
-          {records.length > 0 && (
+          {analyticsRecords.length > 0 && (
             <JournalProjectAnalytics
-              records={records}
-              fields={fields}
+              records={analyticsRecords}
+              fields={analyticsFields}
               clients={clients}
               clientFields={clientFields}
             />
