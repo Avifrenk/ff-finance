@@ -43,24 +43,25 @@ export function FieldValueEditor({
         />
       )
     case 'date': {
-      // На iOS у нативного date-input нет кнопки очистки — даём свою.
+      // На iOS у нативного date-input нет кнопки очистки — даём свою. Кнопка ПОД
+      // полем (не в ряд), чтобы не вылезала за край на узких экранах.
       const dv = parseDate(value) ?? ''
       return (
-        <div className="flex items-center gap-2">
+        <div>
           <input
             type="date"
             value={dv}
             onChange={(e) => onChange(e.target.value || undefined)}
-            className={`${inputCls} flex-1 min-w-0`}
+            className={inputCls}
           />
           {dv && (
             <button
               type="button"
               onClick={() => onChange(undefined)}
-              className="shrink-0 text-xs px-2 py-1 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="mt-1.5 text-xs text-slate-400 hover:text-rose-500"
               aria-label="Очистить дату"
             >
-              Очистить
+              ✕ Очистить дату
             </button>
           )}
         </div>
