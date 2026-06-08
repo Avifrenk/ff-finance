@@ -11,6 +11,32 @@ import {
 
 const VAPID_PUBLIC = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined
 
+// Достаём осмысленный текст из ЛЮБОГО упавшего значения. Стандартный
+// `e instanceof Error ? e.message : '...'` терял причину для двух частых случаев:
+//  - ошибки Supabase/Postgrest — это обычный объект ({message, code, details}),
+//    НЕ Error → раньше показывалось общее «Не удалось включить уведомления»;
+//  - DOMException на iOS при подписке (NotAllowedError/AbortError и т.п.).
+// Теперь показываем реальный текст (+ код, если есть) — видно прямо в плашке.
+function describeError(e: unknown, fallback: string): string {
+  if (e instanceof Error) {
+    return e.name && e.name !== 'Error' ? `${e.name}: ${e.message}` : e.message
+  }
+  if (e && typeof e === 'object') {
+    const o = e as Record<string, unknown>
+    const msg = (o.message ?? o.error_description ?? o.error ?? o.details) as
+      | string
+      | undefined
+    const code = (o.code ?? o.status) as string | number | undefined
+    if (msg) return code != null ? `${msg} (${code})` : msg
+    try {
+      return JSON.stringify(o)
+    } catch {
+      return fallback
+    }
+  }
+  return typeof e === 'string' && e ? e : fallback
+}
+
 export function usePush() {
   const { profile } = useApp()
   const [supported, setSupported] = useState(false)
@@ -78,7 +104,8 @@ export function usePush() {
       if (err) throw err
       setIsSubscribed(true)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось включить уведомления')
+      console.error('[push] enable failed:', e)
+      setError(describeError(e, 'Не удалось включить уведомления'))
     } finally {
       setLoading(false)
     }
@@ -99,7 +126,7 @@ export function usePush() {
       }
       setIsSubscribed(false)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось отключить уведомления')
+      setError(describeError(e, 'Не удалось отключить уведомления'))
     } finally {
       setLoading(false)
     }
