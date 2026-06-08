@@ -144,13 +144,14 @@ export function JournalClient() {
         </p>
       )}
 
-      {/* Заказы */}
-      <section className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-            📦 Заказы{orders.length > 0 ? ` · ${orders.length}` : ''}
-          </h3>
-          {orderFields.length > 0 && (
+      {/* Заказы — только если у проекта есть поля заказа (scope=order). В проектах,
+          где все поля на карточке (Мазаль/Репат/Ника), блок не показываем. */}
+      {orderFields.length > 0 && (
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              📦 Заказы{orders.length > 0 ? ` · ${orders.length}` : ''}
+            </h3>
             <button
               onClick={() => void addOrder()}
               disabled={addingOrder}
@@ -158,32 +159,30 @@ export function JournalClient() {
             >
               + Заказ
             </button>
+          </div>
+          {orders.length === 0 ? (
+            <p className="text-sm text-slate-400">Заказов пока нет.</p>
+          ) : (
+            <ul className="space-y-2">
+              {orders.map((r) => (
+                <JournalRecordCard
+                  key={r.id}
+                  record={r}
+                  fields={orderFields}
+                  today={today}
+                  purposes={orderPurposes}
+                  defaultOpen={r.id === newOrder}
+                  onSave={saveOrder}
+                  onRecordRemove={removeOrder}
+                  emptyTitle="Новый заказ"
+                  removeLabel="Удалить заказ"
+                  removeConfirm="Удалить этот заказ?"
+                />
+              ))}
+            </ul>
           )}
-        </div>
-        {orderFields.length === 0 ? (
-          <p className="text-xs text-slate-400">Нет полей заказа в конструкторе.</p>
-        ) : orders.length === 0 ? (
-          <p className="text-sm text-slate-400">Заказов пока нет.</p>
-        ) : (
-          <ul className="space-y-2">
-            {orders.map((r) => (
-              <JournalRecordCard
-                key={r.id}
-                record={r}
-                fields={orderFields}
-                today={today}
-                purposes={orderPurposes}
-                defaultOpen={r.id === newOrder}
-                onSave={saveOrder}
-                onRecordRemove={removeOrder}
-                emptyTitle="Новый заказ"
-                removeLabel="Удалить заказ"
-                removeConfirm="Удалить этот заказ?"
-              />
-            ))}
-          </ul>
-        )}
-      </section>
+        </section>
+      )}
 
       {/* Комментарии */}
       <section className="space-y-2">

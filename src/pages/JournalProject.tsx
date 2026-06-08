@@ -165,6 +165,7 @@ export function JournalProject() {
                   projectId={id}
                   today={today}
                   orders={orderCount.get(c.id) ?? 0}
+                  hasOrders={orderFields.length > 0}
                 />
               ))}
             </ul>
@@ -182,12 +183,14 @@ function ClientRow({
   projectId,
   today,
   orders,
+  hasOrders,
 }: {
   client: WjClient
   fields: WjField[]
   projectId: string
   today: string
   orders: number
+  hasOrders: boolean
 }) {
   const summary = recordSummary(client.values, fields, today)
   const title = summary.title === 'Без имени' ? 'Без имени' : summary.title
@@ -206,7 +209,7 @@ function ClientRow({
             {title}
           </span>
           <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-500 dark:text-slate-400">
-            {orders > 0 ? <span>📦 заказов: {orders}</span> : <span>нет заказов</span>}
+            {hasOrders && (orders > 0 ? <span>📦 заказов: {orders}</span> : <span>нет заказов</span>)}
             {summary.status && (
               <span
                 className="inline-flex items-center rounded-full px-2 py-0.5 text-slate-700 dark:text-slate-200"
