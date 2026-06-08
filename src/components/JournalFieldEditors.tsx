@@ -42,15 +42,30 @@ export function FieldValueEditor({
           className={inputCls}
         />
       )
-    case 'date':
+    case 'date': {
+      // На iOS у нативного date-input нет кнопки очистки — даём свою.
+      const dv = parseDate(value) ?? ''
       return (
-        <input
-          type="date"
-          value={parseDate(value) ?? ''}
-          onChange={(e) => onChange(e.target.value || undefined)}
-          className={inputCls}
-        />
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={dv}
+            onChange={(e) => onChange(e.target.value || undefined)}
+            className={inputCls}
+          />
+          {dv && (
+            <button
+              type="button"
+              onClick={() => onChange(undefined)}
+              className="shrink-0 text-xs px-2 py-1 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+              aria-label="Очистить дату"
+            >
+              Очистить
+            </button>
+          )}
+        </div>
       )
+    }
     case 'phone':
       return (
         <input
