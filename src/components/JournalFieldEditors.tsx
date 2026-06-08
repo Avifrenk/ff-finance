@@ -51,7 +51,7 @@ export function FieldValueEditor({
             type="date"
             value={dv}
             onChange={(e) => onChange(e.target.value || undefined)}
-            className={inputCls}
+            className={`${inputCls} flex-1 min-w-0`}
           />
           {dv && (
             <button
