@@ -114,7 +114,14 @@ export function JournalProject() {
         </section>
       ) : (
         <>
-          {records.length > 0 && <JournalProjectAnalytics records={records} fields={fields} />}
+          {records.length > 0 && (
+            <JournalProjectAnalytics
+              records={records}
+              fields={fields}
+              clients={clients}
+              clientFields={clientFields}
+            />
+          )}
 
           <div className="flex items-center justify-between">
             <p className="text-sm text-slate-500 dark:text-slate-400">Клиенты проекта.</p>

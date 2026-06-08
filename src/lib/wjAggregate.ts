@@ -30,6 +30,13 @@ export interface WjAggRecord {
   id: string
   values: Record<string, unknown>
   created_at: string
+  client_id: string | null
+}
+
+// Минимальная форма карточки клиента — для резолва имени в срезе «по клиентам».
+export interface WjAggClient {
+  id: string
+  values: Record<string, unknown>
 }
 
 export type Gran = 'day' | 'week' | 'month'
@@ -55,10 +62,9 @@ export interface PurposeAgg {
 }
 
 export interface ClientAgg {
-  key: string // нормализованный ключ имя|телефон
-  name: string
-  phone: string
-  count: number // число записей (заказов) за период
+  key: string // client_id заказа, либо '__none__' для заказов без клиента
+  name: string // резолвится из карточки клиента (wj_clients.values)
+  count: number // число заказов клиента за период
   total: number // принесённый доход в base
   missingRate: boolean
   lastDate: string // последняя дата платежа
@@ -139,15 +145,6 @@ function statusFieldOf(fields: WjField[]): WjField | undefined {
     fields.find((f) => f.analytics_role === 'status')
   )
 }
-function clientFieldOf(fields: WjField[]): WjField | undefined {
-  return (
-    fields.find((f) => f.analytics_role === 'client_name') ??
-    fields.find((f) => f.type === 'text')
-  )
-}
-function phoneFieldOf(fields: WjField[]): WjField | undefined {
-  return fields.find((f) => f.type === 'phone')
-}
 function dueFieldOf(fields: WjField[]): WjField | undefined {
   return (
     fields.find((f) => f.type === 'date' && f.analytics_role === 'date_due') ??
@@ -186,12 +183,6 @@ function isSelfValue(v: string): boolean {
 }
 
 // ── Нормализация ─────────────────────────────────────────────────────────────
-function normName(s: string): string {
-  return s.trim().toLowerCase().replace(/\s+/g, ' ')
-}
-function normPhone(s: string): string {
-  return s.replace(/\D+/g, '')
-}
 export function inRange(date: string, range: DateRange): boolean {
   return date >= range.from && date <= range.to
 }
@@ -260,14 +251,19 @@ export function analyzeProject(
   rates: RatesByDate,
   base: string,
   today: string,
+  clientCards: WjAggClient[] = [],
+  clientFields: WjField[] = [],
 ): WjAnalytics {
   const incFields = incomeFields(fields)
   const expFields = expenseFields(fields)
   const statusField = statusFieldOf(fields)
-  const clientField = clientFieldOf(fields)
-  const phoneField = phoneFieldOf(fields)
   const dueField = dueFieldOf(fields)
   const payee = payeeFieldOf(fields)
+
+  // Имя клиента резолвим из карточки (wj_clients.values), а не из заказа —
+  // после разнесения scope имя ушло на client-поля карточки.
+  const clientNameById = new Map<string, string>()
+  for (const cl of clientCards) clientNameById.set(cl.id, recordTitle(cl.values, clientFields))
 
   const income = emptyTotal()
   const expense = emptyTotal()
@@ -329,23 +325,26 @@ export function analyzeProject(
       }
     }
 
-    // По клиентам (агрегируем принесённый доход).
-    if (clientField) {
-      const name = asString(rec.values[clientField.key]).trim()
-      const phone = phoneField ? asString(rec.values[phoneField.key]).trim() : ''
-      const key = `${normName(name)}|${normPhone(phone)}`
-      if (name || phone) {
-        const c =
-          clientMap.get(key) ??
-          { key, name: name || '—', phone, count: 0, total: 0, missingRate: false, lastDate: date }
-        c.count++
-        c.total += recIncomeBase
-        if (recIncomeMissing) c.missingRate = true
-        if (date > c.lastDate) c.lastDate = date
-        if (!c.name && name) c.name = name
-        if (!c.phone && phone) c.phone = phone
-        clientMap.set(key, c)
-      }
+    // По клиентам — группируем заказы по client_id напрямую. Заказы без клиента
+    // (legacy/разовые) сводим в бакет «Без клиента».
+    {
+      const cid = rec.client_id
+      const key = cid ?? '__none__'
+      const c =
+        clientMap.get(key) ??
+        {
+          key,
+          name: cid ? clientNameById.get(cid) ?? 'Клиент' : 'Без клиента',
+          count: 0,
+          total: 0,
+          missingRate: false,
+          lastDate: date,
+        }
+      c.count++
+      c.total += recIncomeBase
+      if (recIncomeMissing) c.missingRate = true
+      if (date > c.lastDate) c.lastDate = date
+      clientMap.set(key, c)
     }
   }
 
@@ -431,7 +430,7 @@ export function analyzeProject(
       income: incFields.length > 0,
       expense: expFields.length > 0,
       status: !!statusField,
-      client: !!clientField,
+      client: incFields.length > 0,
       due: !!dueField,
       payee: !!payee,
     },

@@ -6,6 +6,7 @@ import { formatMoney } from '../lib/format'
 import { getCurrencies, todayLocalISO } from '../lib/wjValues'
 import type { WjField } from '../hooks/useWjFields'
 import type { WjRecord } from '../hooks/useWjRecords'
+import type { WjClient } from '../hooks/useWjClients'
 import {
   analyzeProject,
   type MoneyTotal,
@@ -19,9 +20,13 @@ import {
 export function JournalProjectAnalytics({
   records,
   fields,
+  clients,
+  clientFields,
 }: {
   records: WjRecord[]
   fields: WjField[]
+  clients: WjClient[]
+  clientFields: WjField[]
 }) {
   const [open, setOpen] = useState(false)
   const [period, setPeriod] = useState<DashboardPeriod>('month')
@@ -33,8 +38,8 @@ export function JournalProjectAnalytics({
   const range = useMemo(() => rangeFor(period), [period])
 
   const a = useMemo<WjAnalytics>(
-    () => analyzeProject(records, fields, range, ratesByDate, base, today),
-    [records, fields, range, ratesByDate, base, today],
+    () => analyzeProject(records, fields, range, ratesByDate, base, today, clients, clientFields),
+    [records, fields, range, ratesByDate, base, today, clients, clientFields],
   )
 
   const cap = a.capabilities

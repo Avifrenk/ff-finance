@@ -5,6 +5,7 @@ import {
   type WjFieldType,
   type WjMoneyDirection,
   type WjAnalyticsRole,
+  type WjFieldScope,
 } from '../hooks/useWjFields'
 import {
   BASE_CURRENCIES,
@@ -64,6 +65,7 @@ export function JournalFieldDialog({ open, onClose, projectId, allFields, field 
   const [choiceDraft, setChoiceDraft] = useState('')
   const [currencies, setCurrencies] = useState<string[]>(['ILS'])
   const [direction, setDirection] = useState<WjMoneyDirection>('income')
+  const [scope, setScope] = useState<WjFieldScope>('order')
   const [roleMode, setRoleMode] = useState<RoleMode>('auto')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -79,6 +81,7 @@ export function JournalFieldDialog({ open, onClose, projectId, allFields, field 
       setChoices(getChoices(field))
       setCurrencies(getCurrencies(field))
       setDirection(field.money_direction ?? 'income')
+      setScope(field.scope)
       setRoleMode(field.analytics_role ?? 'none')
     } else {
       setLabel('')
@@ -87,6 +90,7 @@ export function JournalFieldDialog({ open, onClose, projectId, allFields, field 
       setChoices([])
       setCurrencies(['ILS'])
       setDirection('income')
+      setScope('order')
       setRoleMode('auto')
     }
     setChoiceDraft('')
@@ -165,6 +169,7 @@ export function JournalFieldDialog({ open, onClose, projectId, allFields, field 
           options,
           money_direction: isMoney ? direction : null,
           analytics_role,
+          scope,
         })
       } else {
         const existingKeys = allFields.map((f) => f.key)
@@ -176,6 +181,7 @@ export function JournalFieldDialog({ open, onClose, projectId, allFields, field 
           options,
           money_direction: isMoney ? direction : null,
           analytics_role,
+          scope,
         })
       }
       onClose()
@@ -397,6 +403,47 @@ export function JournalFieldDialog({ open, onClose, projectId, allFields, field 
               </div>
             </div>
           )}
+
+          {/* Куда относится поле: шапка клиента или заказ */}
+          <div>
+            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">
+              Где показывать поле?
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setScope('client')}
+                className={`p-2.5 rounded-lg border text-left transition-colors ${
+                  scope === 'client'
+                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30'
+                    : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                }`}
+              >
+                <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                  🧑 Клиент
+                </div>
+                <div className="text-[11px] leading-tight text-slate-400">
+                  Шапка карточки: имя, телефон
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setScope('order')}
+                className={`p-2.5 rounded-lg border text-left transition-colors ${
+                  scope === 'order'
+                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30'
+                    : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                }`}
+              >
+                <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                  📦 Заказ
+                </div>
+                <div className="text-[11px] leading-tight text-slate-400">
+                  В каждом заказе: сумма, статус
+                </div>
+              </button>
+            </div>
+          </div>
 
           <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
             <input
