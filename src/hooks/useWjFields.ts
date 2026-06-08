@@ -11,6 +11,9 @@ export type WjMoneyDirection = 'income' | 'expense'
 export type WjAnalyticsRole =
   | 'amount' | 'date_payment' | 'date_due' | 'status' | 'client_name'
 
+// Поле принадлежит карточке клиента (шапка) или заказу/записи под клиентом.
+export type WjFieldScope = 'client' | 'order'
+
 // Определение поля проекта (конструктор). Видимость и право записи наследуются
 // от проекта через RLS — отдельного visibility у поля нет.
 export interface WjField {
@@ -25,6 +28,7 @@ export interface WjField {
   is_required: boolean
   sort_order: number
   analytics_role: WjAnalyticsRole | null
+  scope: WjFieldScope
   created_at: string
 }
 
@@ -37,6 +41,7 @@ export interface CreateWjFieldInput {
   is_required?: boolean
   sort_order?: number
   analytics_role?: WjAnalyticsRole | null
+  scope?: WjFieldScope
 }
 
 export interface UpdateWjFieldInput {
@@ -48,10 +53,11 @@ export interface UpdateWjFieldInput {
   is_required?: boolean
   sort_order?: number
   analytics_role?: WjAnalyticsRole | null
+  scope?: WjFieldScope
 }
 
 const SELECT_COLS =
-  'id, project_id, household_id, key, label, type, options, money_direction, is_required, sort_order, analytics_role, created_at'
+  'id, project_id, household_id, key, label, type, options, money_direction, is_required, sort_order, analytics_role, scope, created_at'
 
 export function useWjFields(projectId?: string) {
   const { household } = useApp()
@@ -112,6 +118,7 @@ export function useWjFields(projectId?: string) {
           is_required: input.is_required ?? false,
           sort_order: input.sort_order ?? fields.length,
           analytics_role: input.analytics_role ?? null,
+          scope: input.scope ?? 'order',
         })
         .select(SELECT_COLS)
         .single()
@@ -163,5 +170,20 @@ export function useWjFields(projectId?: string) {
     window.dispatchEvent(new CustomEvent('ff:wj-fields-changed'))
   }, [])
 
-  return { fields, loading, error, reload: load, create, update, remove, reorder }
+  // Поля шапки клиента vs поля заказа (по scope) — для раздельного рендера.
+  const clientFields = fields.filter((f) => f.scope === 'client')
+  const orderFields = fields.filter((f) => f.scope === 'order')
+
+  return {
+    fields,
+    clientFields,
+    orderFields,
+    loading,
+    error,
+    reload: load,
+    create,
+    update,
+    remove,
+    reorder,
+  }
 }

@@ -13,14 +13,17 @@ export interface WjRecord {
   id: string
   project_id: string
   household_id: string
+  client_id: string | null
   values: WjRecordValues
   created_at: string
   updated_at: string
 }
 
-const SELECT_COLS = 'id, project_id, household_id, values, created_at, updated_at'
+const SELECT_COLS = 'id, project_id, household_id, client_id, values, created_at, updated_at'
 
-export function useWjRecords(projectId?: string) {
+// projectId — все записи проекта (для аналитики/списка). clientId (опц.) —
+// сузить до заказов одного клиента (экран карточки клиента).
+export function useWjRecords(projectId?: string, clientId?: string) {
   const { household } = useApp()
   const [records, setRecords] = useState<WjRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -34,11 +37,9 @@ export function useWjRecords(projectId?: string) {
     }
     setLoading(true)
     setError(null)
-    const { data, error: err } = await supabase
-      .from('wj_records')
-      .select(SELECT_COLS)
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: false })
+    let query = supabase.from('wj_records').select(SELECT_COLS).eq('project_id', projectId)
+    if (clientId) query = query.eq('client_id', clientId)
+    const { data, error: err } = await query.order('created_at', { ascending: false })
     setLoading(false)
     if (err) {
       if ((err as { code?: string }).code === '42P01') {
@@ -49,7 +50,7 @@ export function useWjRecords(projectId?: string) {
       return
     }
     setRecords((data ?? []) as WjRecord[])
-  }, [household, projectId])
+  }, [household, projectId, clientId])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -63,13 +64,14 @@ export function useWjRecords(projectId?: string) {
   }, [load])
 
   const create = useCallback(
-    async (values: WjRecordValues = {}) => {
+    async (values: WjRecordValues = {}, clientIdArg?: string) => {
       if (!household || !projectId) throw new Error('No project')
       const { data, error: err } = await supabase
         .from('wj_records')
         .insert({
           project_id: projectId,
           household_id: household.id,
+          client_id: clientIdArg ?? clientId ?? null,
           values,
         })
         .select(SELECT_COLS)
@@ -79,7 +81,7 @@ export function useWjRecords(projectId?: string) {
       window.dispatchEvent(new CustomEvent('ff:wj-records-changed'))
       return data as WjRecord
     },
-    [household, projectId],
+    [household, projectId, clientId],
   )
 
   // Патч values: мержим на клиенте, пишем целиком (jsonb-колонка).

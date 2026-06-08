@@ -964,6 +964,7 @@ export type Database = {
           is_required: boolean
           sort_order: number
           analytics_role: 'amount' | 'date_payment' | 'date_due' | 'status' | 'client_name' | null
+          scope: 'client' | 'order'
           created_at: string
         }
         Insert: {
@@ -978,6 +979,7 @@ export type Database = {
           is_required?: boolean
           sort_order?: number
           analytics_role?: 'amount' | 'date_payment' | 'date_due' | 'status' | 'client_name' | null
+          scope?: 'client' | 'order'
           created_at?: string
         }
         Update: {
@@ -992,11 +994,12 @@ export type Database = {
           is_required?: boolean
           sort_order?: number
           analytics_role?: 'amount' | 'date_payment' | 'date_due' | 'status' | 'client_name' | null
+          scope?: 'client' | 'order'
           created_at?: string
         }
         Relationships: []
       }
-      wj_records: {
+      wj_clients: {
         Row: {
           id: string
           project_id: string
@@ -1017,6 +1020,63 @@ export type Database = {
           id?: string
           project_id?: string
           household_id?: string
+          values?: Record<string, unknown>
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      wj_comments: {
+        Row: {
+          id: string
+          client_id: string
+          household_id: string
+          author_profile_id: string
+          body: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          household_id: string
+          author_profile_id: string
+          body: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          household_id?: string
+          author_profile_id?: string
+          body?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      wj_records: {
+        Row: {
+          id: string
+          project_id: string
+          household_id: string
+          client_id: string | null
+          values: Record<string, unknown>
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          household_id: string
+          client_id?: string | null
+          values?: Record<string, unknown>
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          household_id?: string
+          client_id?: string | null
           values?: Record<string, unknown>
           created_at?: string
           updated_at?: string
