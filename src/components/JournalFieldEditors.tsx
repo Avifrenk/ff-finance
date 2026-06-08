@@ -4,6 +4,7 @@ import {
   getChoices,
   getCurrencies,
   parseMoney,
+  parseMoneyList,
   parseChecklist,
   parseDate,
   parseTextValues,
@@ -141,8 +142,82 @@ function StatusEditor({
   )
 }
 
-// Деньги — сумма + валюта + (для expense) «на что» с автоподсказкой.
-function MoneyEditor({
+// Деньги. Доход — одна сумма + валюта. Расход — СПИСОК строк «на что + сумма»
+// (несколько позиций: «Ира очереди 150$», «Миша сопровождение 100$»).
+function MoneyEditor(props: {
+  field: WjField
+  value: unknown
+  purposes: string[]
+  onChange: (v: unknown) => void
+}) {
+  if (props.field.money_direction === 'expense') return <ExpenseListEditor {...props} />
+  return <IncomeMoneyEditor {...props} />
+}
+
+// Доход — одиночная сумма + валюта.
+function IncomeMoneyEditor({
+  field,
+  value,
+  onChange,
+}: {
+  field: WjField
+  value: unknown
+  onChange: (v: unknown) => void
+}) {
+  const currencies = getCurrencies(field)
+  const m = parseMoney(value)
+
+  const emit = (amount: string, currency: string) => {
+    const n = amount.trim()
+    if (n === '') {
+      onChange(undefined)
+      return
+    }
+    onChange({ amount: Number(n), currency } satisfies WjMoney)
+  }
+
+  const amount = m ? String(m.amount) : ''
+  const currency = m?.currency ?? currencies[0]
+
+  return (
+    <div className="flex gap-2">
+      <input
+        type="number"
+        inputMode="decimal"
+        defaultValue={amount}
+        key={`a-${currency}`}
+        onBlur={(e) => emit(e.target.value, currency)}
+        placeholder="0"
+        className={`${inputCls} flex-1`}
+      />
+      {currencies.length > 1 ? (
+        <select
+          value={currency}
+          onChange={(e) => emit(amount, e.target.value)}
+          className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 text-sm text-slate-900 dark:text-slate-100"
+        >
+          {currencies.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <span className="flex items-center px-2 text-sm text-slate-400">{currency}</span>
+      )}
+    </div>
+  )
+}
+
+interface ExpRow {
+  purpose: string
+  amount: string
+  currency: string
+}
+
+// Расход — список строк. Каждая строка: «на что» (текст, с автоподсказкой) +
+// сумма + валюта. Можно добавлять/убирать строки.
+function ExpenseListEditor({
   field,
   value,
   purposes,
@@ -154,74 +229,118 @@ function MoneyEditor({
   onChange: (v: unknown) => void
 }) {
   const currencies = getCurrencies(field)
-  const m = parseMoney(value)
-  const isExpense = field.money_direction === 'expense'
   const listId = `purpose-${field.id}`
 
-  const emit = (amount: string, currency: string, purpose: string) => {
-    const n = amount.trim()
-    if (n === '') {
-      onChange(undefined)
-      return
-    }
-    const next: WjMoney = { amount: Number(n), currency }
-    const p = purpose.trim()
-    if (p) next.purpose = p
-    onChange(next)
+  const initial = (): ExpRow[] => {
+    const parsed = parseMoneyList(value)
+    const rows = parsed.map((m) => ({
+      purpose: m.purpose ?? '',
+      amount: String(m.amount),
+      currency: m.currency,
+    }))
+    return rows.length ? rows : [{ purpose: '', amount: '', currency: currencies[0] }]
+  }
+  const [rows, setRows] = useState<ExpRow[]>(initial)
+
+  // Собрать значение из строк: берём строки с числовой суммой; пусто → undefined.
+  const commit = (next: ExpRow[]) => {
+    const entries = next
+      .map((r): WjMoney | null => {
+        const a = r.amount.trim()
+        if (a === '' || !Number.isFinite(Number(a))) return null
+        const e: WjMoney = { amount: Number(a), currency: r.currency }
+        const p = r.purpose.trim()
+        if (p) e.purpose = p
+        return e
+      })
+      .filter((e): e is WjMoney => e !== null)
+    onChange(entries.length ? entries : undefined)
   }
 
-  const amount = m ? String(m.amount) : ''
-  const currency = m?.currency ?? currencies[0]
-  const purpose = m?.purpose ?? ''
-  const needPurpose = isExpense && amount !== '' && purpose === ''
+  const patch = (i: number, p: Partial<ExpRow>, doCommit = false) => {
+    setRows((prev) => {
+      const next = prev.map((r, j) => (j === i ? { ...r, ...p } : r))
+      if (doCommit) commit(next)
+      return next
+    })
+  }
+
+  const addRow = () =>
+    setRows((prev) => [...prev, { purpose: '', amount: '', currency: currencies[0] }])
+
+  const removeRow = (i: number) =>
+    setRows((prev) => {
+      const next = prev.filter((_, j) => j !== i)
+      const safe = next.length ? next : [{ purpose: '', amount: '', currency: currencies[0] }]
+      commit(safe)
+      return safe
+    })
 
   return (
-    <div className="space-y-1.5">
-      <div className="flex gap-2">
-        <input
-          type="number"
-          inputMode="decimal"
-          defaultValue={amount}
-          key={`a-${currency}`}
-          onBlur={(e) => emit(e.target.value, currency, purpose)}
-          placeholder="0"
-          className={`${inputCls} flex-1`}
-        />
-        {currencies.length > 1 ? (
-          <select
-            value={currency}
-            onChange={(e) => emit(amount, e.target.value, purpose)}
-            className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 text-sm text-slate-900 dark:text-slate-100"
-          >
-            {currencies.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <span className="flex items-center px-2 text-sm text-slate-400">{currency}</span>
-        )}
-      </div>
-      {isExpense && (
-        <>
-          <input
-            type="text"
-            defaultValue={purpose}
-            key={`p-${value ? 'v' : 'e'}`}
-            list={listId}
-            onBlur={(e) => emit(amount, currency, e.target.value)}
-            placeholder="На что (обязательно для расхода)"
-            className={`${inputCls} ${needPurpose ? 'ring-2 ring-rose-400 border-rose-400' : ''}`}
-          />
-          <datalist id={listId}>
-            {purposes.map((p) => (
-              <option key={p} value={p} />
-            ))}
-          </datalist>
-          {needPurpose && <p className="text-[11px] text-rose-500">Укажите назначение траты.</p>}
-        </>
-      )}
+    <div className="space-y-2">
+      {rows.map((r, i) => (
+        <div key={i} className="flex gap-2 items-start">
+          <div className="flex-1 space-y-1.5">
+            <input
+              type="text"
+              value={r.purpose}
+              list={listId}
+              onChange={(e) => patch(i, { purpose: e.target.value })}
+              onBlur={() => commit(rows)}
+              placeholder="На что (напр. Ира очереди)"
+              className={inputCls}
+            />
+            <div className="flex gap-2">
+              <input
+                type="number"
+                inputMode="decimal"
+                value={r.amount}
+                onChange={(e) => patch(i, { amount: e.target.value })}
+                onBlur={() => commit(rows)}
+                placeholder="0"
+                className={`${inputCls} flex-1`}
+              />
+              {currencies.length > 1 ? (
+                <select
+                  value={r.currency}
+                  onChange={(e) => patch(i, { currency: e.target.value }, true)}
+                  className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 text-sm text-slate-900 dark:text-slate-100"
+                >
+                  {currencies.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="flex items-center px-2 text-sm text-slate-400">{r.currency}</span>
+              )}
+            </div>
+          </div>
+          {rows.length > 1 && (
+            <button
+              type="button"
+              onClick={() => removeRow(i)}
+              className="mt-2 text-slate-400 hover:text-rose-500"
+              aria-label="Убрать строку"
+            >
+              ×
+            </button>
+          )}
+        </div>
+      ))}
+      <datalist id={listId}>
+        {purposes.map((p) => (
+          <option key={p} value={p} />
+        ))}
+      </datalist>
+      <button
+        type="button"
+        onClick={addRow}
+        className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+      >
+        + строка расхода
+      </button>
     </div>
   )
 }

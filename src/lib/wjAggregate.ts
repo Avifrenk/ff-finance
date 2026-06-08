@@ -17,6 +17,7 @@ import type { DateRange } from './aggregate'
 import type { WjField } from '../hooks/useWjFields'
 import {
   parseMoney,
+  parseMoneyList,
   parseDate,
   asString,
   getChoices,
@@ -310,21 +311,22 @@ export function analyzeProject(
       }
     }
 
-    // Расход записи + разбивка по назначению.
+    // Расход записи + разбивка по назначению. Расход — список строк
+    // (несколько позиций: «Ира очереди 150$», «Миша сопровождение 100$»).
     for (const f of expFields) {
-      const m = parseMoney(rec.values[f.key])
-      if (!m) continue
-      const conv = convertOne(m, base, rates, date)
-      addToTotal(expense, m, conv)
-      const key = (m.purpose ?? '').trim() || '— без назначения —'
-      const agg =
-        purposeMap.get(key) ??
-        { purpose: key, total: 0, byCurrency: {}, count: 0, missingRate: false }
-      agg.count++
-      agg.byCurrency[m.currency] = (agg.byCurrency[m.currency] ?? 0) + m.amount
-      if (conv === null) agg.missingRate = true
-      else agg.total += conv
-      purposeMap.set(key, agg)
+      for (const m of parseMoneyList(rec.values[f.key])) {
+        const conv = convertOne(m, base, rates, date)
+        addToTotal(expense, m, conv)
+        const key = (m.purpose ?? '').trim() || '— без назначения —'
+        const agg =
+          purposeMap.get(key) ??
+          { purpose: key, total: 0, byCurrency: {}, count: 0, missingRate: false }
+        agg.count++
+        agg.byCurrency[m.currency] = (agg.byCurrency[m.currency] ?? 0) + m.amount
+        if (conv === null) agg.missingRate = true
+        else agg.total += conv
+        purposeMap.set(key, agg)
+      }
     }
 
     // По клиентам (агрегируем принесённый доход).

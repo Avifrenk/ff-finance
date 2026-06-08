@@ -79,6 +79,17 @@ export function parseMoney(v: unknown): WjMoney | null {
   return purpose ? { amount, currency, purpose } : { amount, currency }
 }
 
+// Список денежных строк (для расходов с несколькими позициями:
+// «Ира очереди 150$», «Миша сопровождение 100$»). Терпим и одиночный объект
+// (старая форма), и массив. Пустые/битые строки отбрасываем.
+export function parseMoneyList(v: unknown): WjMoney[] {
+  if (Array.isArray(v)) {
+    return v.map(parseMoney).filter((m): m is WjMoney => m !== null)
+  }
+  const one = parseMoney(v)
+  return one ? [one] : []
+}
+
 export function parseChecklist(v: unknown): WjChecklistItem[] {
   if (!Array.isArray(v)) return []
   return v
@@ -347,8 +358,9 @@ export function collectPurposes(
   const set = new Set<string>()
   for (const r of records) {
     for (const k of moneyKeys) {
-      const m = parseMoney(r.values[k])
-      if (m?.purpose) set.add(m.purpose)
+      for (const m of parseMoneyList(r.values[k])) {
+        if (m.purpose) set.add(m.purpose)
+      }
     }
   }
   return [...set].sort((a, b) => a.localeCompare(b, 'ru'))
